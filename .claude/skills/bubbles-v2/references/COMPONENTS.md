@@ -10,21 +10,23 @@ Import: `charm.land/bubbles/v2`
 import "charm.land/bubbles/v2/spinner"
 ```
 
-### Available spinners
+### Constants
+
+Pre-defined spinner animations:
 
 ```go
-spinner.Line       // | / - \
-spinner.Dot        // braille dots
-spinner.MiniDot    // small braille
-spinner.Jump       // jump
-spinner.Pulse      // █ ▓ ▒ ░
-spinner.Points     // ∙∙∙ ●∙∙ ...
-spinner.Globe      // 🌍 🌎 🌏
-spinner.Moon       // moon phases
-spinner.Monkey     // 🙈 🙉 🙊
-spinner.Meter      // ▱▱▱ → ▰▰▰
-spinner.Hamburger  // ☱ ☲ ☴ ☲
-spinner.Ellipsis   // "" . .. ...
+spinner.Line       // | / - \  (10 FPS)
+spinner.Dot        // braille dots ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷ (10 FPS)
+spinner.MiniDot    // small braille ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏ (12 FPS)
+spinner.Jump       // ⢄ ⢂ ⢁ ⡁ ⡈ ⡐ ⡠ (10 FPS)
+spinner.Pulse      // █ ▓ ▒ ░ (8 FPS)
+spinner.Points     // ∙∙∙ ●∙∙ ∙●∙ ∙∙● (7 FPS)
+spinner.Globe      // 🌍 🌎 🌏 (4 FPS)
+spinner.Moon       // 🌑 🌒 🌓 🌔 🌕 🌖 🌗 🌘 (8 FPS)
+spinner.Monkey     // 🙈 🙉 🙊 (3 FPS)
+spinner.Meter      // ▱▱▱ ▰▱▱ ▰▰▱ ▰▰▰ (7 FPS)
+spinner.Hamburger  // ☱ ☲ ☴ ☲ (3 FPS)
+spinner.Ellipsis   // "" . .. ... (3 FPS)
 ```
 
 ### Types
@@ -38,6 +40,12 @@ type Spinner struct {
 type Model struct {
     Spinner Spinner
     Style   lipgloss.Style
+    // Has unexported fields.
+}
+
+type TickMsg struct {
+    Time time.Time
+    ID   int
 }
 ```
 
@@ -67,9 +75,9 @@ import "charm.land/bubbles/v2/textinput"
 ```go
 type EchoMode int
 const (
-    EchoNormal   EchoMode = iota
-    EchoPassword           // shows EchoCharacter mask
-    EchoNone               // shows nothing
+    EchoNormal   EchoMode = iota  // displays text as is (default)
+    EchoPassword                  // shows EchoCharacter mask
+    EchoNone                      // displays nothing
 )
 
 type Model struct {
@@ -82,6 +90,28 @@ type Model struct {
     KeyMap          KeyMap
     Validate        ValidateFunc
     ShowSuggestions bool
+    // Has unexported fields.
+}
+
+type ValidateFunc func(string) error
+
+type KeyMap struct {
+    CharacterForward        key.Binding
+    CharacterBackward       key.Binding
+    WordForward             key.Binding
+    WordBackward            key.Binding
+    DeleteWordBackward      key.Binding
+    DeleteWordForward       key.Binding
+    DeleteAfterCursor       key.Binding
+    DeleteBeforeCursor      key.Binding
+    DeleteCharacterBackward key.Binding
+    DeleteCharacterForward  key.Binding
+    LineStart               key.Binding
+    LineEnd                 key.Binding
+    Paste                   key.Binding
+    AcceptSuggestion        key.Binding
+    NextSuggestion          key.Binding
+    PrevSuggestion          key.Binding
 }
 
 type Styles struct {
@@ -109,36 +139,48 @@ type CursorStyle struct {
 
 ```go
 func New() Model
+func Blink() tea.Msg
+func Paste() tea.Msg
 func DefaultKeyMap() KeyMap       // function in v2, was variable in v1
 func DefaultStyles(isDark bool) Styles
 func DefaultDarkStyles() Styles
 func DefaultLightStyles() Styles
-func Blink() tea.Msg
-func Paste() tea.Msg
 
-// Methods
+// Lifecycle
 func (m *Model) Focus() tea.Cmd
 func (m *Model) Blur()
 func (m Model) Focused() bool
+
+// Dimensions
 func (m *Model) SetWidth(w int)
 func (m Model) Width() int
+
+// Value
 func (m *Model) SetValue(s string)
 func (m Model) Value() string
 func (m *Model) Reset()
+
+// Cursor
 func (m *Model) SetCursor(pos int)
 func (m Model) Position() int
 func (m *Model) CursorStart()
 func (m *Model) CursorEnd()
-func (m *Model) SetStyles(s Styles)
-func (m Model) Styles() Styles
 func (m *Model) SetVirtualCursor(v bool)
 func (m Model) VirtualCursor() bool
 func (m Model) Cursor() *tea.Cursor
+
+// Suggestions
 func (m *Model) SetSuggestions(s []string)
-func (m *Model) AvailableSuggestions() []string
-func (m *Model) MatchedSuggestions() []string
-func (m *Model) CurrentSuggestion() string
-func (m *Model) CurrentSuggestionIndex() int
+func (m Model) AvailableSuggestions() []string
+func (m Model) MatchedSuggestions() []string
+func (m Model) CurrentSuggestion() string
+func (m Model) CurrentSuggestionIndex() int
+
+// Styling
+func (m *Model) SetStyles(s Styles)
+func (m Model) Styles() Styles
+
+// Update loop
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
 ```
@@ -164,6 +206,34 @@ type Model struct {
     CharLimit            int
     MaxHeight            int
     MaxWidth             int
+    // Has unexported fields.
+}
+
+type KeyMap struct {
+    CharacterBackward       key.Binding
+    CharacterForward        key.Binding
+    DeleteAfterCursor       key.Binding
+    DeleteBeforeCursor      key.Binding
+    DeleteCharacterBackward key.Binding
+    DeleteCharacterForward  key.Binding
+    DeleteWordBackward      key.Binding
+    DeleteWordForward       key.Binding
+    InsertNewline           key.Binding
+    LineEnd                 key.Binding
+    LineNext                key.Binding
+    LinePrevious            key.Binding
+    LineStart               key.Binding
+    PageUp                  key.Binding
+    PageDown                key.Binding
+    Paste                   key.Binding
+    WordBackward            key.Binding
+    WordForward             key.Binding
+    InputBegin              key.Binding
+    InputEnd                key.Binding
+    UppercaseWordForward    key.Binding
+    LowercaseWordForward    key.Binding
+    CapitalizeWordForward   key.Binding
+    TransposeCharacterBackward key.Binding
 }
 
 type Styles struct {
@@ -182,54 +252,93 @@ type StyleState struct {
     Placeholder      lipgloss.Style
     Prompt           lipgloss.Style
 }
+
+type CursorStyle struct {
+    Color      color.Color
+    Shape      tea.CursorShape
+    Blink      bool
+    BlinkSpeed time.Duration
+}
+
+type LineInfo struct {
+    Width        int  // columns in line
+    CharWidth    int  // characters (accounting for double-width runes)
+    Height       int  // rows in line
+    StartColumn  int
+    ColumnOffset int
+    RowOffset    int
+    CharOffset   int
+}
+
+type PromptInfo struct {
+    LineNumber int
+    Focused    bool
+}
 ```
 
 ### Functions
 
 ```go
 func New() Model
-func DefaultKeyMap() KeyMap       // function in v2, was variable in v1
+func Blink() tea.Msg
+func Paste() tea.Msg
+func DefaultKeyMap() KeyMap
 func DefaultStyles(isDark bool) Styles
 func DefaultDarkStyles() Styles
 func DefaultLightStyles() Styles
-func Blink() tea.Msg
-func Paste() tea.Msg
 
-// Methods
+// Lifecycle
 func (m *Model) Focus() tea.Cmd
 func (m *Model) Blur()
 func (m Model) Focused() bool
+
+// Dimensions
 func (m *Model) SetWidth(w int)
 func (m Model) Width() int
 func (m *Model) SetHeight(h int)
 func (m Model) Height() int
+
+// Value
 func (m *Model) SetValue(s string)
 func (m Model) Value() string
 func (m *Model) Reset()
-func (m Model) Line() int           // 0-indexed row
-func (m Model) Column() int         // 0-indexed column (v2 addition)
-func (m Model) LineCount() int
-func (m *Model) Length() int
+func (m Model) Length() int
 func (m *Model) InsertRune(r rune)
 func (m *Model) InsertString(s string)
+
+// Cursor / Navigation
+func (m Model) Line() int              // 0-indexed row
+func (m Model) Column() int            // 0-indexed column
+func (m Model) LineCount() int
 func (m Model) LineInfo() LineInfo
 func (m *Model) CursorUp()
 func (m *Model) CursorDown()
 func (m *Model) CursorStart()
 func (m *Model) CursorEnd()
-func (m *Model) MoveToBegin()       // renamed from MoveToBeginning in v2
-func (m *Model) MoveToEnd()         // renamed from MoveToEnd in v2
-func (m *Model) PageUp()            // v2 addition
-func (m *Model) PageDown()          // v2 addition
-func (m *Model) SetCursorColumn(col int)  // renamed from SetCursor in v2
+func (m *Model) MoveToBegin()          // renamed from MoveToBeginning in v2
+func (m *Model) MoveToEnd()
+func (m *Model) PageUp()               // v2 addition
+func (m *Model) PageDown()             // v2 addition
+func (m *Model) SetCursorColumn(col int)
+
+// Word
+func (m *Model) Word() string          // word at cursor position
+
+// Scroll
+func (m Model) ScrollPercent() float64
+func (m Model) ScrollYOffset() int     // v2 addition
+
+// Prompt
+func (m *Model) SetPromptFunc(promptWidth int, fn func(PromptInfo) string)
+
+// Styling
 func (m *Model) SetStyles(s Styles)
 func (m Model) Styles() Styles
 func (m *Model) SetVirtualCursor(v bool)
 func (m Model) VirtualCursor() bool
 func (m Model) Cursor() *tea.Cursor
-func (m Model) ScrollPercent() float64
-func (m Model) ScrollYOffset() int       // v2 addition
-func (m *Model) SetPromptFunc(promptWidth int, fn func(PromptInfo) string)
+
+// Update loop
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
 ```
@@ -249,7 +358,6 @@ type Item interface {
     FilterValue() string
 }
 
-// For DefaultDelegate:
 type DefaultItem interface {
     Item
     Title() string
@@ -279,6 +387,7 @@ type Model struct {
     Help              help.Model
     FilterInput       textinput.Model
     StatusMessageLifetime time.Duration
+    // Has unexported fields.
 }
 
 type FilterState int
@@ -287,6 +396,67 @@ const (
     Filtering
     FilterApplied
 )
+
+type KeyMap struct {
+    CursorUp    key.Binding
+    CursorDown  key.Binding
+    NextPage    key.Binding
+    PrevPage    key.Binding
+    GoToStart   key.Binding
+    GoToEnd     key.Binding
+    Filter      key.Binding
+    ClearFilter key.Binding
+    CancelWhileFiltering key.Binding
+    AcceptWhileFiltering key.Binding
+    ShowFullHelp  key.Binding
+    CloseFullHelp key.Binding
+    Quit key.Binding
+    ForceQuit key.Binding
+}
+
+type Styles struct {
+    TitleBar lipgloss.Style
+    Title    lipgloss.Style
+    Spinner  lipgloss.Style
+    Filter   textinput.Styles
+    DefaultFilterCharacterMatch lipgloss.Style
+    StatusBar             lipgloss.Style
+    StatusEmpty           lipgloss.Style
+    StatusBarActiveFilter lipgloss.Style
+    StatusBarFilterCount  lipgloss.Style
+    NoItems lipgloss.Style
+    PaginationStyle lipgloss.Style
+    HelpStyle       lipgloss.Style
+    ActivePaginationDot   lipgloss.Style
+    InactivePaginationDot lipgloss.Style
+    ArabicPagination      lipgloss.Style
+    DividerDot            lipgloss.Style
+}
+
+type DefaultDelegate struct {
+    ShowDescription bool
+    Styles          DefaultItemStyles
+    UpdateFunc      func(tea.Msg, *Model) tea.Cmd
+    ShortHelpFunc   func() []key.Binding
+    FullHelpFunc    func() [][]key.Binding
+}
+
+type DefaultItemStyles struct {
+    NormalTitle lipgloss.Style
+    NormalDesc  lipgloss.Style
+    SelectedTitle lipgloss.Style
+    SelectedDesc  lipgloss.Style
+    DimmedTitle lipgloss.Style
+    DimmedDesc  lipgloss.Style
+    FilterMatch lipgloss.Style
+}
+
+type Rank struct {
+    Index          int
+    MatchedIndexes []int
+}
+
+type FilterMatchesMsg []filteredItem
 ```
 
 ### Functions
@@ -294,30 +464,35 @@ const (
 ```go
 func New(items []Item, delegate ItemDelegate, width, height int) Model
 func DefaultKeyMap() KeyMap
-func DefaultStyles(isDark bool) Styles          // isDark required (v2 change)
+func DefaultStyles(isDark bool) Styles
 func NewDefaultDelegate() DefaultDelegate
-func NewDefaultItemStyles(isDark bool) DefaultItemStyles  // isDark required (v2 change)
+func NewDefaultItemStyles(isDark bool) DefaultItemStyles
 func DefaultFilter(term string, targets []string) []Rank
 func UnsortedFilter(term string, targets []string) []Rank
 
-// Methods
+// Dimensions
 func (m *Model) SetSize(width, height int)
 func (m *Model) SetWidth(v int)
 func (m *Model) SetHeight(v int)
 func (m Model) Width() int
 func (m Model) Height() int
+
+// Items
 func (m *Model) SetItems(i []Item) tea.Cmd
 func (m Model) Items() []Item
 func (m Model) VisibleItems() []Item
+func (m *Model) InsertItem(index int, item Item) tea.Cmd
+func (m *Model) SetItem(index int, item Item) tea.Cmd
+func (m *Model) RemoveItem(index int)
+
+// Selection
 func (m Model) SelectedItem() Item
 func (m Model) Index() int
 func (m Model) GlobalIndex() int
 func (m Model) Cursor() int
 func (m *Model) Select(index int)
-func (m *Model) InsertItem(index int, item Item) tea.Cmd
-func (m *Model) SetItem(index int, item Item) tea.Cmd
-func (m *Model) RemoveItem(index int)
-func (m *Model) SetDelegate(d ItemDelegate)
+
+// Navigation
 func (m *Model) CursorUp()
 func (m *Model) CursorDown()
 func (m *Model) GoToStart()
@@ -325,7 +500,8 @@ func (m *Model) GoToEnd()
 func (m *Model) NextPage()
 func (m *Model) PrevPage()
 func (m *Model) ResetSelected()
-func (m *Model) ResetFilter()
+
+// Filtering
 func (m Model) FilterState() FilterState
 func (m Model) FilterValue() string
 func (m Model) IsFiltered() bool
@@ -334,7 +510,10 @@ func (m *Model) SetFilterText(filter string)
 func (m *Model) SetFilteringEnabled(v bool)
 func (m Model) FilteringEnabled() bool
 func (m Model) SettingFilter() bool
+func (m *Model) ResetFilter()
 func (m Model) MatchesForItem(index int) []int
+
+// Visibility
 func (m *Model) SetShowTitle(v bool)
 func (m Model) ShowTitle() bool
 func (m *Model) SetShowFilter(v bool)
@@ -344,15 +523,28 @@ func (m Model) ShowStatusBar() bool
 func (m *Model) SetStatusBarItemName(singular, plural string)
 func (m Model) StatusBarItemName() (string, string)
 func (m *Model) SetShowPagination(v bool)
-func (m *Model) ShowPagination() bool
+func (m Model) ShowPagination() bool
 func (m *Model) SetShowHelp(v bool)
 func (m Model) ShowHelp() bool
 func (m *Model) DisableQuitKeybindings()
+
+// Delegate
+func (m *Model) SetDelegate(d ItemDelegate)
+
+// Spinner
 func (m *Model) SetSpinner(s spinner.Spinner)
 func (m *Model) StartSpinner() tea.Cmd
 func (m *Model) StopSpinner()
 func (m *Model) ToggleSpinner() tea.Cmd
+
+// Status
 func (m *Model) NewStatusMessage(s string) tea.Cmd
+
+// Help
+func (m Model) ShortHelp() []key.Binding
+func (m Model) FullHelp() [][]key.Binding
+
+// Update loop
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
 ```
@@ -375,6 +567,23 @@ type Column struct {
 
 type Row []string
 
+type Model struct {
+    KeyMap KeyMap
+    Help   help.Model
+    // Has unexported fields.
+}
+
+type KeyMap struct {
+    LineUp       key.Binding
+    LineDown     key.Binding
+    PageUp       key.Binding
+    PageDown     key.Binding
+    HalfPageUp   key.Binding
+    HalfPageDown key.Binding
+    GotoTop      key.Binding
+    GotoBottom   key.Binding
+}
+
 type Styles struct {
     Header   lipgloss.Style
     Cell     lipgloss.Style
@@ -387,7 +596,9 @@ type Styles struct {
 ```go
 func New(opts ...Option) Model
 func DefaultKeyMap() KeyMap
-func DefaultStyles() Styles     // no isDark needed (table unchanged in v2)
+func DefaultStyles() Styles
+
+// Options
 func WithColumns(cols []Column) Option
 func WithRows(rows []Row) Option
 func WithFocused(f bool) Option
@@ -396,29 +607,43 @@ func WithWidth(w int) Option
 func WithStyles(s Styles) Option
 func WithKeyMap(km KeyMap) Option
 
-// Methods
+// Focus
 func (m *Model) Focus()
 func (m *Model) Blur()
 func (m Model) Focused() bool
-func (m Model) Columns() []Column
-func (m *Model) SetColumns(c []Column)
-func (m Model) Rows() []Row
-func (m *Model) SetRows(r []Row)
-func (m Model) Cursor() int
-func (m *Model) SetCursor(n int)
-func (m Model) SelectedRow() Row
-func (m *Model) MoveUp(n int)
-func (m *Model) MoveDown(n int)
-func (m *Model) GotoTop()
-func (m *Model) GotoBottom()
+
+// Dimensions
 func (m Model) Width() int
 func (m *Model) SetWidth(w int)
 func (m Model) Height() int
 func (m *Model) SetHeight(h int)
-func (m *Model) SetStyles(s Styles)
-func (m *Model) UpdateViewport()
-func (m Model) HelpView() string
+
+// Columns & Rows
+func (m Model) Columns() []Column
+func (m *Model) SetColumns(c []Column)
+func (m Model) Rows() []Row
+func (m *Model) SetRows(r []Row)
 func (m *Model) FromValues(value, separator string)
+
+// Selection
+func (m Model) Cursor() int
+func (m *Model) SetCursor(n int)
+func (m Model) SelectedRow() Row
+
+// Navigation
+func (m *Model) MoveUp(n int)
+func (m *Model) MoveDown(n int)
+func (m *Model) GotoTop()
+func (m *Model) GotoBottom()
+
+// Styling
+func (m *Model) SetStyles(s Styles)
+
+// Help
+func (m Model) HelpView() string
+
+// Update loop
+func (m *Model) UpdateViewport()
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
 ```
@@ -435,9 +660,9 @@ import "charm.land/bubbles/v2/progress"
 
 ```go
 const (
-    DefaultFullCharHalfBlock = '▌'
-    DefaultFullCharFullBlock  = '█'
-    DefaultEmptyCharBlock     = '░'
+    DefaultFullCharHalfBlock = '▌'  // allows more granular color blending
+    DefaultFullCharFullBlock = '█'  // disables higher resolution blending
+    DefaultEmptyCharBlock    = '░'
 )
 ```
 
@@ -452,6 +677,11 @@ type Model struct {
     ShowPercentage  bool
     PercentFormat   string
     PercentageStyle lipgloss.Style
+    // Has unexported fields.
+}
+
+type FrameMsg struct {
+    // Has unexported fields.
 }
 
 type ColorFunc func(total, current float64) color.Color
@@ -461,28 +691,36 @@ type ColorFunc func(total, current float64) color.Color
 
 ```go
 func New(opts ...Option) Model
-func WithColors(colors ...color.Color) Option   // replaces WithGradient/WithSolidFill
-func WithDefaultBlend() Option                  // replaces WithDefaultGradient
-func WithScaled(enabled bool) Option            // replaces WithScaledGradient/WithDefaultScaledGradient
-func WithColorFunc(fn ColorFunc) Option         // v2 addition: dynamic color
+
+// Options
+func WithColors(colors ...color.Color) Option   // 0: clear, 1: solid, 2+: blend
+func WithDefaultBlend() Option                  // purple to pink gradient
+func WithScaled(enabled bool) Option            // scale gradient to filled portion
+func WithColorFunc(fn ColorFunc) Option         // dynamic color based on percent
 func WithFillCharacters(full, empty rune) Option
 func WithoutPercentage() Option
 func WithSpringOptions(frequency, damping float64) Option
 func WithWidth(w int) Option
 
-// Methods
+// Dimensions
 func (m *Model) SetWidth(w int)
 func (m Model) Width() int
+
+// Percent
 func (m *Model) SetPercent(p float64) tea.Cmd
 func (m Model) Percent() float64
 func (m *Model) IncrPercent(v float64) tea.Cmd
 func (m *Model) DecrPercent(v float64) tea.Cmd
+
+// Animation
+func (m Model) Init() tea.Cmd
 func (m *Model) IsAnimating() bool
 func (m *Model) SetSpringOptions(frequency, damping float64)
-func (m Model) Init() tea.Cmd
+
+// Update loop
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
-func (m Model) ViewAs(percent float64) string   // static render without animation
+func (m Model) ViewAs(percent float64) string  // static render
 ```
 
 ---
@@ -504,10 +742,22 @@ type Model struct {
     MouseWheelDelta        int
     YPosition              int
     Style                  lipgloss.Style
-    LeftGutterFunc         GutterFunc      // v2 addition
-    HighlightStyle         lipgloss.Style  // v2 addition
-    SelectedHighlightStyle lipgloss.Style  // v2 addition
-    StyleLineFunc          func(int) lipgloss.Style  // v2 addition
+    LeftGutterFunc         GutterFunc
+    HighlightStyle         lipgloss.Style
+    SelectedHighlightStyle lipgloss.Style
+    StyleLineFunc          func(int) lipgloss.Style
+    // Has unexported fields.
+}
+
+type KeyMap struct {
+    PageDown     key.Binding
+    PageUp       key.Binding
+    HalfPageUp   key.Binding
+    HalfPageDown key.Binding
+    Down         key.Binding
+    Up           key.Binding
+    Left         key.Binding
+    Right        key.Binding
 }
 
 type GutterContext struct {
@@ -530,41 +780,55 @@ func WithWidth(w int) Option
 func WithHeight(h int) Option
 func DefaultKeyMap() KeyMap
 
-// Methods
+// Dimensions
 func (m *Model) SetWidth(w int)
 func (m Model) Width() int
 func (m *Model) SetHeight(h int)
 func (m Model) Height() int
-func (m *Model) SetYOffset(n int)   // replaces direct field access
-func (m *Model) YOffset() int
-func (m *Model) SetXOffset(n int)
-func (m *Model) XOffset() int
+
+// Content
 func (m *Model) SetContent(s string)
 func (m *Model) SetContentLines(lines []string)  // v2 addition
 func (m Model) GetContent() string               // v2 addition
 func (m Model) TotalLineCount() int
 func (m Model) VisibleLineCount() int
+
+// Offset
+func (m *Model) SetYOffset(n int)
+func (m Model) YOffset() int
+func (m *Model) SetXOffset(n int)
+func (m Model) XOffset() int
+
+// Position
 func (m Model) AtTop() bool
 func (m Model) AtBottom() bool
 func (m Model) PastBottom() bool
 func (m Model) ScrollPercent() float64
 func (m Model) HorizontalScrollPercent() float64  // v2 addition
+
+// Navigation
 func (m *Model) GotoTop() []string
 func (m *Model) GotoBottom() []string
 func (m *Model) ScrollUp(n int)
 func (m *Model) ScrollDown(n int)
-func (m *Model) ScrollLeft(n int)                 // v2 addition
-func (m *Model) ScrollRight(n int)                // v2 addition
+func (m *Model) ScrollLeft(n int)   // v2 addition
+func (m *Model) ScrollRight(n int)  // v2 addition
 func (m *Model) PageUp()
 func (m *Model) PageDown()
 func (m *Model) HalfPageUp()
 func (m *Model) HalfPageDown()
-func (m *Model) SetHighlights(matches [][]int)    // v2 addition
-func (m *Model) HighlightNext()                   // v2 addition
-func (m *Model) HighlightPrevious()               // v2 addition
-func (m *Model) ClearHighlights()                 // v2 addition
+
+// Highlights (v2 additions)
+func (m *Model) SetHighlights(matches [][]int)
+func (m *Model) HighlightNext()
+func (m *Model) HighlightPrevious()
+func (m *Model) ClearHighlights()
+
+// Other
 func (m *Model) EnsureVisible(line, colstart, colend int)  // v2 addition
-func (m *Model) SetHorizontalStep(n int)          // v2 addition
+func (m *Model) SetHorizontalStep(n int)                   // v2 addition
+
+// Update loop
 func (m Model) Init() tea.Cmd
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
@@ -596,6 +860,7 @@ type Model struct {
     FullSeparator  string
     Ellipsis       string
     Styles         Styles
+    // Has unexported fields.
 }
 
 type Styles struct {
@@ -612,12 +877,11 @@ type Styles struct {
 ### Functions
 
 ```go
-func New() Model                           // was NewModel() in v1
-func DefaultStyles(isDark bool) Styles     // isDark required (v2 change)
+func New() Model
+func DefaultStyles(isDark bool) Styles
 func DefaultDarkStyles() Styles
 func DefaultLightStyles() Styles
 
-// Methods
 func (m *Model) SetWidth(w int)
 func (m Model) Width() int
 func (m Model) View(k KeyMap) string
@@ -637,9 +901,9 @@ import "charm.land/bubbles/v2/key"
 ### Types
 
 ```go
-type Binding struct{ /* unexported */ }
-
-type BindingOpt func(*Binding)
+type Binding struct {
+    // Has unexported fields.
+}
 
 type Help struct {
     Key  string
@@ -657,7 +921,6 @@ func WithDisabled() BindingOpt
 
 func Matches[Key fmt.Stringer](k Key, b ...Binding) bool
 
-// Methods
 func (b Binding) Enabled() bool
 func (b *Binding) SetEnabled(v bool)
 func (b Binding) Keys() []string
@@ -694,17 +957,21 @@ type Model struct {
     ArabicFormat string
     KeyMap       KeyMap
 }
+
+type KeyMap struct {
+    PrevPage key.Binding
+    NextPage key.Binding
+}
 ```
 
 ### Functions
 
 ```go
 func New(opts ...Option) Model
-func DefaultKeyMap() KeyMap    // function in v2, was variable in v1
+func DefaultKeyMap() KeyMap
 func WithPerPage(perPage int) Option
 func WithTotalPages(totalPages int) Option
 
-// Methods
 func (m *Model) SetTotalPages(items int) int
 func (m Model) ItemsOnPage(totalItems int) int
 func (m *Model) GetSliceBounds(length int) (start, end int)
@@ -727,8 +994,24 @@ import "charm.land/bubbles/v2/timer"
 ### Types
 
 ```go
-type TickMsg struct { ... }
-type TimeoutMsg struct { ... }
+type Model struct {
+    Timeout  time.Duration
+    Interval time.Duration
+    // Has unexported fields.
+}
+
+type TickMsg struct {
+    ID       int
+    Timeout  bool
+}
+
+type TimeoutMsg struct {
+    ID int
+}
+
+type StartStopMsg struct {
+    ID int
+}
 
 type Option func(*Model)
 ```
@@ -740,15 +1023,15 @@ type Option func(*Model)
 func New(timeout time.Duration, opts ...Option) Model
 func WithInterval(d time.Duration) Option
 
-// Methods
+func (m Model) ID() int
 func (m Model) Init() tea.Cmd
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
-func (m Model) View() string
 func (m Model) Running() bool
 func (m Model) Timedout() bool
 func (m *Model) Start() tea.Cmd
 func (m *Model) Stop() tea.Cmd
 func (m *Model) Toggle() tea.Cmd
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+func (m Model) View() string
 ```
 
 ---
@@ -759,6 +1042,29 @@ func (m *Model) Toggle() tea.Cmd
 import "charm.land/bubbles/v2/stopwatch"
 ```
 
+### Types
+
+```go
+type Model struct {
+    Interval time.Duration
+    // Has unexported fields.
+}
+
+type TickMsg struct {
+    ID int
+}
+
+type StartStopMsg struct {
+    ID int
+}
+
+type ResetMsg struct {
+    ID int
+}
+
+type Option func(*Model)
+```
+
 ### Functions
 
 ```go
@@ -766,16 +1072,16 @@ import "charm.land/bubbles/v2/stopwatch"
 func New(opts ...Option) Model
 func WithInterval(d time.Duration) Option
 
-// Methods
+func (m Model) ID() int
 func (m Model) Init() tea.Cmd
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
-func (m Model) View() string
 func (m Model) Running() bool
 func (m Model) Elapsed() time.Duration
-func (m *Model) Start() tea.Cmd
-func (m *Model) Stop() tea.Cmd
-func (m *Model) Reset() tea.Cmd
-func (m *Model) Toggle() tea.Cmd
+func (m Model) Start() tea.Cmd
+func (m Model) Stop() tea.Cmd
+func (m Model) Toggle() tea.Cmd
+func (m Model) Reset() tea.Cmd
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+func (m Model) View() string
 ```
 
 ---
@@ -786,35 +1092,70 @@ func (m *Model) Toggle() tea.Cmd
 import "charm.land/bubbles/v2/filepicker"
 ```
 
+### Types
+
+```go
+type Model struct {
+    Path             string
+    CurrentDirectory string
+    AllowedTypes     []string
+    KeyMap           KeyMap
+    ShowPermissions  bool
+    ShowSize         bool
+    ShowHidden       bool
+    DirAllowed       bool
+    FileAllowed      bool
+    FileSelected     string
+    AutoHeight       bool
+    Cursor           string
+    Styles           Styles
+    // Has unexported fields.
+}
+
+type KeyMap struct {
+    GoToTop  key.Binding
+    GoToLast key.Binding
+    Down     key.Binding
+    Up       key.Binding
+    PageUp   key.Binding
+    PageDown key.Binding
+    Back     key.Binding
+    Open     key.Binding
+    Select   key.Binding
+}
+
+type Styles struct {
+    DisabledCursor   lipgloss.Style
+    Cursor           lipgloss.Style
+    Symlink          lipgloss.Style
+    Directory        lipgloss.Style
+    File             lipgloss.Style
+    DisabledFile     lipgloss.Style
+    Permission       lipgloss.Style
+    Selected         lipgloss.Style
+    DisabledSelected lipgloss.Style
+    FileSize         lipgloss.Style
+    EmptyDirectory   lipgloss.Style
+}
+```
+
 ### Functions
 
 ```go
 func New() Model
-func DefaultStyles() Styles    // was DefaultStylesWithRenderer(r) in v1
+func IsHidden(file string) (bool, error)
+func DefaultStyles() Styles
 
-// Methods
 func (m Model) Init() tea.Cmd
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
 func (m Model) View() string
+
+func (m Model) Height() int
+func (m *Model) SetHeight(h int)
+
 func (m Model) DidSelectFile(msg tea.Msg) (bool, string)
 func (m Model) DidSelectDisabledFile(msg tea.Msg) (bool, string)
-func (m *Model) SetHeight(h int)   // method in v2, was field in v1
-func (m Model) Height() int
-```
-
-### Key Model Fields
-
-```go
-type Model struct {
-    CurrentDirectory string
-    AllowedTypes     []string   // e.g. []string{".go", ".md"}
-    DirAllowed       bool
-    FileAllowed      bool
-    ShowHidden       bool
-    AutoHeight       bool
-    Styles           Styles
-    KeyMap           KeyMap
-}
+func (m Model) HighlightedPath() string
 ```
 
 ---
@@ -827,25 +1168,48 @@ import "charm.land/bubbles/v2/cursor"
 
 > Usually embedded within textinput/textarea rather than used directly.
 
+### Types
+
+```go
+type Mode int
+const (
+    CursorBlink Mode = iota
+    CursorStatic
+    CursorHide
+)
+
+type Model struct {
+    Style      lipgloss.Style
+    TextStyle  lipgloss.Style
+    BlinkSpeed time.Duration
+    IsBlinked  bool
+    // Has unexported fields.
+}
+
+type BlinkMsg struct {
+    // Has unexported fields.
+}
+```
+
+### Functions
+
+```go
+func New() Model
+func Blink() tea.Msg
+
+func (m Model) Mode() Mode
+func (m *Model) SetMode(mode Mode) tea.Cmd
+func (m *Model) SetChar(char string)
+func (m *Model) Focus() tea.Cmd
+func (m *Model) Blur()
+func (m *Model) Blink() tea.Cmd
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+func (m Model) View() string
+```
+
 ### Changes from v1
 
 | v1 | v2 |
 |---|---|
 | `model.Blink` | `model.IsBlinked` |
 | `model.BlinkCmd()` | `model.Blink()` |
-
-### Functions
-
-```go
-func New(opts ...Option) Model
-func NewWithMode(m Mode) Model
-
-// Methods
-func (m Model) IsBlinked() bool      // renamed from Blink in v1
-func (m Model) Blink() tea.Msg       // renamed from BlinkCmd in v1
-func (m Model) Focus() tea.Cmd
-func (m Model) Blur()
-func (m Model) Focused() bool
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
-func (m Model) View(displayValue string) string
-```

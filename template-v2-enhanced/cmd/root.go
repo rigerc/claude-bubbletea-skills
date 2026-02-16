@@ -105,3 +105,9 @@ func GetConfigFile() string {
 func GetLogLevel() string {
 	return logLevel
 }
+
+// WasLogLevelSet reports whether --log-level was explicitly passed on the command line.
+// Use this to distinguish an explicit flag from Cobra's default value.
+func WasLogLevelSet() bool {
+	return rootCmd.PersistentFlags().Changed("log-level")
+}

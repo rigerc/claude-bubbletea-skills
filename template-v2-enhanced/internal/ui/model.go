@@ -1,193 +1,95 @@
 // Package ui provides the BubbleTea UI model for the application.
-// This file contains the main model implementation following the Elm Architecture.
+// This file contains the minimal model skeleton following the Elm Architecture.
 package ui
 
 import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
-	applogger "template-v2-enhanced/internal/logger"
 	"template-v2-enhanced/config"
-	"template-v2-enhanced/internal/ui/nav"
-	"template-v2-enhanced/internal/ui/screens"
+	applogger "template-v2-enhanced/internal/logger"
 )
 
-// errMsg wraps an error for use as a BubbleTea message.
-type errMsg error
-
 // Model represents the application state.
-// It holds all the state for the terminal UI application.
 type Model struct {
-	// navStack is the navigation stack that manages screen transitions.
-	navStack nav.Stack
+	// cfg drives UI behaviour (AltScreen, MouseEnabled, etc.).
+	cfg config.Config
 
-	// quitting indicates the app is about to exit.
-	quitting bool
-
-	// err holds any error that occurs during execution.
-	err error
+	// width and height store the current terminal dimensions.
+	width  int
+	height int
 
 	// isDark indicates if the terminal has a dark background.
 	isDark bool
 
-	// config holds the application configuration.
-	config *config.Config
+	// quitting is set to true when the app is about to exit.
+	quitting bool
 }
 
-// New creates a new model with default values.
-// It initializes the navigation stack with the home screen as the root.
-func New(cfg *config.Config) Model {
-	// Create the home screen as the root with config
-	homeScreen := screens.NewHomeScreen(cfg.UI.AltScreen)
-
-	// Create navigation stack with home screen as root
-	stack := nav.NewStack(homeScreen)
-
-	return Model{
-		navStack: stack,
-		config:   cfg,
-	}
+// New creates a new Model with the provided configuration.
+func New(cfg config.Config) Model {
+	return Model{cfg: cfg}
 }
 
-// Init initializes the model and returns the initial command.
-// It requests the terminal background color.
+// Init returns the initial command. It requests the terminal background color
+// so that styles can be adapted to light or dark themes.
 func (m Model) Init() tea.Cmd {
 	applogger.Debug().Msg("Initializing UI model")
-
-	return tea.Batch(
-		m.navStack.Init(),
-		tea.RequestBackgroundColor,
-	)
+	return tea.RequestBackgroundColor
 }
 
-// Update handles incoming messages and updates the model state.
-// It returns the updated model and any commands to execute.
+// Update handles incoming messages and returns an updated model and command.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	applogger.Trace().Msgf("Update called with message type: %T", msg)
-
 	switch msg := msg.(type) {
-	case tea.BackgroundColorMsg:
-		// Handle terminal background color change
-		m.isDark = msg.IsDark()
-		applogger.Debug().Msgf("Background color detected: isDark=%v", m.isDark)
-
-		// Forward to navigation stack
-		var updatedModel tea.Model
-		var cmd tea.Cmd
-		updatedModel, cmd = m.navStack.Update(msg)
-		m.navStack = updatedModel.(nav.Stack)
-		return m, cmd
-
 	case tea.KeyPressMsg:
-		// Let the navigation stack handle key press messages first
-		// This allows screens to handle their own key bindings
-		var updatedModel tea.Model
-		var cmd tea.Cmd
-		updatedModel, cmd = m.navStack.Update(msg)
-		m.navStack = updatedModel.(nav.Stack)
-
-		// If the command is nil, check if we should handle it at the model level
-		if cmd == nil {
-			// Handle quit key if not handled by screen
-			if msg.String() == "q" || msg.String() == "ctrl+c" {
-				applogger.Debug().Msg("Quit key pressed, exiting")
-				m.quitting = true
-				return m, tea.Quit
-			}
+		switch msg.String() {
+		case "q", "ctrl+c":
+			applogger.Debug().Msg("Quit key pressed")
+			m.quitting = true
+			return m, tea.Quit
 		}
 
-		return m, cmd
-
 	case tea.WindowSizeMsg:
-		// Forward window resize to navigation stack
-		var updatedModel tea.Model
-		var cmd tea.Cmd
-		updatedModel, cmd = m.navStack.Update(msg)
-		m.navStack = updatedModel.(nav.Stack)
-		return m, cmd
+		m.width = msg.Width
+		m.height = msg.Height
+		applogger.Debug().Msgf("Window resized: %dx%d", m.width, m.height)
 
-	case errMsg:
-		// Handle error message
-		m.err = msg
-		applogger.Error().Msgf("Error received: %v", msg)
-		return m, nil
-
-	default:
-		// Forward all other messages to the navigation stack
-		var updatedModel tea.Model
-		var cmd tea.Cmd
-		updatedModel, cmd = m.navStack.Update(msg)
-		m.navStack = updatedModel.(nav.Stack)
-		return m, cmd
+	case tea.BackgroundColorMsg:
+		m.isDark = msg.IsDark()
+		applogger.Debug().Msgf("Background color detected: isDark=%v", m.isDark)
 	}
+
+	return m, nil
 }
 
-// View renders the model state as a tea.View.
-// It returns the view from the active screen in the navigation stack.
+// View renders the current model state as a tea.View.
 func (m Model) View() tea.View {
-	if m.err != nil {
-		v := tea.NewView(m.renderError(m.err.Error()))
-		v.AltScreen = m.config.UI.AltScreen
-		return v
+	if m.quitting {
+		return tea.NewView("")
 	}
 
-	// Get view from navigation stack
-	return m.navStack.View()
-}
-
-// renderError builds the visual representation of an error state.
-func (m Model) renderError(errMsg string) string {
-	ld := lipgloss.LightDark(m.isDark)
-
-	errorStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FF0000")).
-		MarginLeft(2).
-		MarginTop(1)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(ld(
-			lipgloss.Color("#777777"),
-			lipgloss.Color("#BBBBBB"),
-		)).
-		MarginLeft(2).
-		MarginTop(1)
-
-	return fmt.Sprintf(
-		"%s\n\n%s",
-		errorStyle.Render("Error: "+errMsg),
-		helpStyle.Render("Press q to quit"),
+	content := fmt.Sprintf(
+		"BubbleTea v2 skeleton\n\nTerminal: %dx%d  dark=%v\n\nPress q to quit.",
+		m.width, m.height, m.isDark,
 	)
+	v := tea.NewView(content)
+	v.AltScreen = m.cfg.UI.AltScreen
+	if m.cfg.UI.MouseEnabled {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
+	return v
 }
 
 // Run starts the BubbleTea program with the given model.
-// It handles any errors that occur during execution.
 func Run(m Model) error {
 	applogger.Info().Msg("Starting BubbleTea program")
 
-	// Create and run the program
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
-		applogger.Error().Err(err).Msg("Program failed")
 		return fmt.Errorf("running program: %w", err)
 	}
 
 	applogger.Info().Msg("Program exited successfully")
-	return nil
-}
-
-// RunWithConfig starts the BubbleTea program with additional configuration options.
-// This allows for customizing the program behavior before starting.
-func RunWithConfig(m Model, opts ...tea.ProgramOption) error {
-	applogger.Info().Msg("Starting BubbleTea program with custom options")
-
-	p := tea.NewProgram(m, opts...)
-	if _, err := p.Run(); err != nil {
-		applogger.Error().Err(err).Msg("Program failed")
-		return fmt.Errorf("running program: %w", err)
-	}
-
 	return nil
 }

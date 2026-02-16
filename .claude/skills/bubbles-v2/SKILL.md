@@ -8,9 +8,10 @@ description: >-
   Covers the v2 API at charm.land/bubbles/v2, migration from v1, light/dark
   theme handling, and all component patterns.
 argument-hint: [component|pattern|feature description]
+allowed-tools: Read, Grep, Bash(go doc *)
 metadata:
   author: skill-generator
-  version: "1.0"
+  version: "2.0"
   category: go-cli
 ---
 
@@ -21,8 +22,13 @@ Bubble Tea v2 applications. Requires Bubble Tea v2 + Lip Gloss v2.
 
 ## Quick Reference
 
-- Full component API → [references/COMPONENTS.md](references/COMPONENTS.md)
+- Full component API → [references/COMPONENTS.md](references/COMPONENTS.md) (types, constants, all methods, message types)
 - v1 → v2 migration guide → [references/MIGRATION.md](references/MIGRATION.md)
+
+For detailed `go doc` output, run:
+```bash
+go doc --all charm.land/bubbles/v2/<component>
+```
 
 ---
 

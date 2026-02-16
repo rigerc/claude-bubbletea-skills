@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(timeout 3 go run:*)",
+      "Bash(go get:*)",
+      "Bash(go test:*)",
+      "Skill(lipgloss-v2)",
+      "Skill(bubbles-v2)"
+    ]
+  }
+}
