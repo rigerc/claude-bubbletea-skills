@@ -1,0 +1,106 @@
+package filepicker // import "charm.land/bubbles/v2/filepicker"
+
+Package filepicker provides a file picker component for Bubble Tea applications.
+
+FUNCTIONS
+
+func IsHidden(file string) (bool, error)
+    IsHidden reports whether a file is hidden or not.
+
+
+TYPES
+
+type KeyMap struct {
+	GoToTop  key.Binding
+	GoToLast key.Binding
+	Down     key.Binding
+	Up       key.Binding
+	PageUp   key.Binding
+	PageDown key.Binding
+	Back     key.Binding
+	Open     key.Binding
+	Select   key.Binding
+}
+    KeyMap defines key bindings for each user action.
+
+func DefaultKeyMap() KeyMap
+    DefaultKeyMap defines the default keybindings.
+
+type Model struct {
+
+	// Path is the path which the user has selected with the file picker.
+	Path string
+
+	// CurrentDirectory is the directory that the user is currently in.
+	CurrentDirectory string
+
+	// AllowedTypes specifies which file types the user may select.
+	// If empty the user may select any file.
+	AllowedTypes []string
+
+	KeyMap KeyMap
+
+	ShowPermissions bool
+	ShowSize        bool
+	ShowHidden      bool
+	DirAllowed      bool
+	FileAllowed     bool
+
+	FileSelected string
+
+	AutoHeight bool
+
+	Cursor string
+	Styles Styles
+	// Has unexported fields.
+}
+    Model represents a file picker.
+
+func New() Model
+    New returns a new filepicker model with default styling and key bindings.
+
+func (m Model) DidSelectDisabledFile(msg tea.Msg) (bool, string)
+    DidSelectDisabledFile returns whether a user tried to select a disabled file
+    (on this msg). This is necessary only if you would like to warn the user
+    that they tried to select a disabled file.
+
+func (m Model) DidSelectFile(msg tea.Msg) (bool, string)
+    DidSelectFile returns whether a user has selected a file (on this msg).
+
+func (m Model) Height() int
+    Height returns the height of the file picker.
+
+func (m Model) HighlightedPath() string
+    HighlightedPath returns the path of the currently highlighted file or
+    directory.
+
+func (m Model) Init() tea.Cmd
+    Init initializes the file picker model.
+
+func (m *Model) SetHeight(h int)
+    SetHeight sets the height of the file picker.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update handles user interactions within the file picker model.
+
+func (m Model) View() string
+    View returns the view of the file picker.
+
+type Styles struct {
+	DisabledCursor   lipgloss.Style
+	Cursor           lipgloss.Style
+	Symlink          lipgloss.Style
+	Directory        lipgloss.Style
+	File             lipgloss.Style
+	DisabledFile     lipgloss.Style
+	Permission       lipgloss.Style
+	Selected         lipgloss.Style
+	DisabledSelected lipgloss.Style
+	FileSize         lipgloss.Style
+	EmptyDirectory   lipgloss.Style
+}
+    Styles defines the possible customizations for styles in the file picker.
+
+func DefaultStyles() Styles
+    DefaultStyles defines the default styling for the file picker.
+

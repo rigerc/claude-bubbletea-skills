@@ -1,0 +1,1403 @@
+package zerolog // import "github.com/rs/zerolog"
+
+Package zerolog provides a lightweight logging library dedicated to JSON
+logging.
+
+A global Logger can be use for simple logging:
+
+    import "github.com/rs/zerolog/log"
+
+    log.Info().Msg("hello world")
+    // Output: {"time":1494567715,"level":"info","message":"hello world"}
+
+NOTE: To import the global logger, import the "log" subpackage
+"github.com/rs/zerolog/log".
+
+Fields can be added to log messages:
+
+    log.Info().Str("foo", "bar").Msg("hello world")
+    // Output: {"time":1494567715,"level":"info","message":"hello world","foo":"bar"}
+
+Create logger instance to manage different outputs:
+
+    logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+    logger.Info().
+           Str("foo", "bar").
+           Msg("hello world")
+    // Output: {"time":1494567715,"level":"info","message":"hello world","foo":"bar"}
+
+Sub-loggers let you chain loggers with additional context:
+
+    sublogger := log.With().Str("component", "foo").Logger()
+    sublogger.Info().Msg("hello world")
+    // Output: {"time":1494567715,"level":"info","message":"hello world","component":"foo"}
+
+Level logging
+
+    zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
+    log.Debug().Msg("filtered out message")
+    log.Info().Msg("routed message")
+
+    if e := log.Debug(); e.Enabled() {
+        // Compute log output only if enabled.
+        value := compute()
+        e.Str("foo": value).Msg("some debug message")
+    }
+    // Output: {"level":"info","time":1494567715,"routed message"}
+
+Customize automatic field names:
+
+    log.TimestampFieldName = "t"
+    log.LevelFieldName = "p"
+    log.MessageFieldName = "m"
+
+    log.Info().Msg("hello world")
+    // Output: {"t":1494567715,"p":"info","m":"hello world"}
+
+Log with no level and message:
+
+    log.Log().Str("foo","bar").Msg("")
+    // Output: {"time":1494567715,"foo":"bar"}
+
+Add contextual fields to global Logger:
+
+    log.Logger = log.With().Str("foo", "bar").Logger()
+
+Sample logs:
+
+    sampled := log.Sample(&zerolog.BasicSampler{N: 10})
+    sampled.Info().Msg("will be logged every 10 messages")
+
+Log with contextual hooks:
+
+    // Create the hook:
+    type SeverityHook struct{}
+
+    func (h SeverityHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
+         if level != zerolog.NoLevel {
+             e.Str("severity", level.String())
+         }
+    }
+
+    // And use it:
+    var h SeverityHook
+    log := zerolog.New(os.Stdout).Hook(h)
+    log.Warn().Msg("")
+    // Output: {"level":"warn","severity":"warn"}
+
+# Caveats
+
+Field duplication:
+
+There is no fields deduplication out-of-the-box. Using the same key multiple
+times creates new key in final JSON each time.
+
+    logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+    logger.Info().
+           Timestamp().
+           Msg("dup")
+    // Output: {"level":"info","time":1494567715,"time":1494567715,"message":"dup"}
+
+In this case, many consumers will take the last value, but this is not
+guaranteed; check yours if in doubt.
+
+Concurrency safety:
+
+Be careful when calling UpdateContext. It is not concurrency safe. Use the With
+method to create a child logger:
+
+    func handler(w http.ResponseWriter, r *http.Request) {
+        // Create a child logger for concurrency safety
+        logger := log.Logger.With().Logger()
+
+        // Add context fields, for example User-Agent from HTTP headers
+        logger.UpdateContext(func(c zerolog.Context) zerolog.Context {
+            ...
+        })
+    }
+
+CONSTANTS
+
+const (
+	// TimeFormatUnix defines a time format that makes time fields to be
+	// serialized as Unix timestamp integers.
+	TimeFormatUnix = ""
+
+	// TimeFormatUnixMs defines a time format that makes time fields to be
+	// serialized as Unix timestamp integers in milliseconds.
+	TimeFormatUnixMs = "UNIXMS"
+
+	// TimeFormatUnixMicro defines a time format that makes time fields to be
+	// serialized as Unix timestamp integers in microseconds.
+	TimeFormatUnixMicro = "UNIXMICRO"
+
+	// TimeFormatUnixNano defines a time format that makes time fields to be
+	// serialized as Unix timestamp integers in nanoseconds.
+	TimeFormatUnixNano = "UNIXNANO"
+
+	// DurationFormatFloat defines a format for Duration fields that makes duration fields to be
+	// serialized as floating point numbers.
+	DurationFormatFloat = "float"
+	// DurationFormatInt defines a format for Duration fields that makes duration fields to be
+	// serialized as integers.
+	DurationFormatInt = "int"
+	// DurationFormatString defines a format for Duration fields that makes duration fields to be
+	// serialized as string.
+	DurationFormatString = "string"
+)
+
+VARIABLES
+
+var (
+	// TimestampFieldName is the field name used for the timestamp field.
+	TimestampFieldName = "time"
+
+	// LevelFieldName is the field name used for the level field.
+	LevelFieldName = "level"
+
+	// LevelTraceValue is the value used for the trace level field.
+	LevelTraceValue = "trace"
+	// LevelDebugValue is the value used for the debug level field.
+	LevelDebugValue = "debug"
+	// LevelInfoValue is the value used for the info level field.
+	LevelInfoValue = "info"
+	// LevelWarnValue is the value used for the warn level field.
+	LevelWarnValue = "warn"
+	// LevelErrorValue is the value used for the error level field.
+	LevelErrorValue = "error"
+	// LevelFatalValue is the value used for the fatal level field.
+	LevelFatalValue = "fatal"
+	// LevelPanicValue is the value used for the panic level field.
+	LevelPanicValue = "panic"
+
+	// LevelFieldMarshalFunc allows customization of global level field marshaling.
+	LevelFieldMarshalFunc = func(l Level) string {
+		return l.String()
+	}
+
+	// MessageFieldName is the field name used for the message field.
+	MessageFieldName = "message"
+
+	// ErrorFieldName is the field name used for error fields.
+	ErrorFieldName = "error"
+
+	// CallerFieldName is the field name used for caller field.
+	CallerFieldName = "caller"
+
+	// CallerSkipFrameCount is the number of stack frames to skip to find the caller.
+	CallerSkipFrameCount = 2
+
+	// CallerMarshalFunc allows customization of global caller marshaling
+	CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+		return file + ":" + strconv.Itoa(line)
+	}
+
+	// ErrorStackFieldName is the field name used for error stacks.
+	ErrorStackFieldName = "stack"
+
+	// ErrorStackMarshaler extract the stack from err if any.
+	ErrorStackMarshaler func(err error) interface{}
+
+	// ErrorMarshalFunc allows customization of global error marshaling
+	ErrorMarshalFunc = func(err error) interface{} {
+		return err
+	}
+
+	// InterfaceMarshalFunc allows customization of interface marshaling.
+	// Default: "encoding/json.Marshal" with disabled HTML escaping
+	InterfaceMarshalFunc = func(v interface{}) ([]byte, error) {
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		err := encoder.Encode(v)
+		if err != nil {
+			return nil, err
+		}
+		b := buf.Bytes()
+		if len(b) > 0 {
+
+			return b[:len(b)-1], nil
+		}
+		return b, nil
+	}
+
+	// TimeFieldFormat defines the time format of the Time field type. If set to
+	// TimeFormatUnix, TimeFormatUnixMs, TimeFormatUnixMicro or TimeFormatUnixNano, the time is formatted as a UNIX
+	// timestamp as integer.
+	TimeFieldFormat = time.RFC3339
+
+	// TimestampFunc defines the function called to generate a timestamp.
+	TimestampFunc = time.Now
+
+	// DurationFieldFormat defines the format of the Duration field type.
+	DurationFieldFormat = DurationFormatFloat
+
+	// DurationFieldUnit defines the unit for time.Duration type fields added
+	// using the Dur method.
+	DurationFieldUnit = time.Millisecond
+
+	// DurationFieldInteger renders Dur fields as integer instead of float if
+	// set to true.
+	// Deprecated: use DurationFieldFormat with DurationFormatInt instead.
+	DurationFieldInteger = false
+
+	// ErrorHandler is called whenever zerolog fails to write an event on its
+	// output. If not set, an error is printed on the stderr. This handler must
+	// be thread safe and non-blocking.
+	ErrorHandler func(err error)
+
+	// FatalExitFunc is called by log.Fatal() instead of os.Exit(1). If not set,
+	// os.Exit(1) is called.
+	FatalExitFunc func()
+
+	// DefaultContextLogger is returned from Ctx() if there is no logger associated
+	// with the context.
+	DefaultContextLogger *Logger
+
+	// LevelColors are used by ConsoleWriter's consoleDefaultFormatLevel to color
+	// log levels.
+	LevelColors = map[Level]int{
+		TraceLevel: colorBlue,
+		DebugLevel: 0,
+		InfoLevel:  colorGreen,
+		WarnLevel:  colorYellow,
+		ErrorLevel: colorRed,
+		FatalLevel: colorRed,
+		PanicLevel: colorRed,
+	}
+
+	// FormattedLevels are used by ConsoleWriter's consoleDefaultFormatLevel
+	// for a short level name.
+	FormattedLevels = map[Level]string{
+		TraceLevel: "TRC",
+		DebugLevel: "DBG",
+		InfoLevel:  "INF",
+		WarnLevel:  "WRN",
+		ErrorLevel: "ERR",
+		FatalLevel: "FTL",
+		PanicLevel: "PNC",
+	}
+
+	// TriggerLevelWriterBufferReuseLimit is a limit in bytes that a buffer is dropped
+	// from the TriggerLevelWriter buffer pool if the buffer grows above the limit.
+	TriggerLevelWriterBufferReuseLimit = 64 * 1024
+
+	// FloatingPointPrecision, if set to a value other than -1, controls the number
+	// of digits when formatting float numbers in JSON. See strconv.FormatFloat for
+	// more details.
+	FloatingPointPrecision = -1
+)
+var (
+	// Often samples log every ~ 10 events.
+	Often = RandomSampler(10)
+	// Sometimes samples log every ~ 100 events.
+	Sometimes = RandomSampler(100)
+	// Rarely samples log every ~ 1000 events.
+	Rarely = RandomSampler(1000)
+)
+
+FUNCTIONS
+
+func ConsoleTestWriter(t TestingLog) func(w *ConsoleWriter)
+    ConsoleTestWriter creates an option that correctly sets the file frame depth
+    for testing.TB log.
+
+func DisableSampling(v bool)
+    DisableSampling will disable sampling in all Loggers if true.
+
+func SetGlobalLevel(l Level)
+    SetGlobalLevel sets the global override for log level. If this values is
+    raised, all Loggers will use at least this value.
+
+    To globally disable logs, set GlobalLevel to Disabled.
+
+func SyncWriter(w io.Writer) io.Writer
+    SyncWriter wraps w so that each call to Write is synchronized with a mutex.
+    This syncer can be used to wrap the call to writer's Write method if it is
+    not thread safe. Note that you do not need this wrapper for os.File Write
+    operations on POSIX and Windows systems as they are already thread-safe.
+
+
+TYPES
+
+type Array struct {
+	// Has unexported fields.
+}
+    Array is used to prepopulate an array of items which can be re-used to add
+    to log messages.
+
+func Arr() *Array
+    Arr creates an array to be added to an Event or Context. WARNING:
+    This function is deprecated because it does not preserve the stack, hooks,
+    and context from the parent event. Deprecated: Use Event.CreateArray or
+    Context.CreateArray instead.
+
+func (a *Array) Bool(b bool) *Array
+    Bool appends the val as a bool to the array.
+
+func (a *Array) Bytes(val []byte) *Array
+    Bytes appends the val as a string to the array.
+
+func (a *Array) Dict(dict *Event) *Array
+    Dict adds the dict Event to the array
+
+func (a *Array) Dur(d time.Duration) *Array
+    Dur appends d to the array.
+
+func (a *Array) Err(err error) *Array
+    Err serializes and appends the err to the array.
+
+func (a *Array) Errs(errs []error) *Array
+    Errs serializes and appends errors to the array.
+
+func (a *Array) Float32(f float32) *Array
+    Float32 appends f as a float32 to the array.
+
+func (a *Array) Float64(f float64) *Array
+    Float64 appends f as a float64 to the array.
+
+func (a *Array) Hex(val []byte) *Array
+    Hex appends the val as a hex string to the array.
+
+func (a *Array) IPAddr(ip net.IP) *Array
+    IPAddr adds a net.IP IPv4 or IPv6 address to the array
+
+func (a *Array) IPPrefix(pfx net.IPNet) *Array
+    IPPrefix adds a net.IPNet IPv4 or IPv6 Prefix (IP + mask) to the array
+
+func (a *Array) Int(i int) *Array
+    Int appends i as a int to the array.
+
+func (a *Array) Int16(i int16) *Array
+    Int16 appends i as a int16 to the array.
+
+func (a *Array) Int32(i int32) *Array
+    Int32 appends i as a int32 to the array.
+
+func (a *Array) Int64(i int64) *Array
+    Int64 appends i as a int64 to the array.
+
+func (a *Array) Int8(i int8) *Array
+    Int8 appends i as a int8 to the array.
+
+func (a *Array) Interface(i interface{}) *Array
+    Interface appends i marshaled using reflection.
+
+func (a *Array) MACAddr(ha net.HardwareAddr) *Array
+    MACAddr adds a net.HardwareAddr MAC (Ethernet) address to the array
+
+func (*Array) MarshalZerologArray(*Array)
+    MarshalZerologArray method here is no-op - since data is already in the
+    needed format.
+
+func (a *Array) Object(obj LogObjectMarshaler) *Array
+    Object marshals an object that implement the LogObjectMarshaler interface
+    and appends it to the array.
+
+func (a *Array) RawJSON(val []byte) *Array
+    RawJSON adds already encoded JSON to the array.
+
+func (a *Array) Str(val string) *Array
+    Str appends the val as a string to the array.
+
+func (a *Array) Time(t time.Time) *Array
+    Time appends t formatted as string using zerolog.TimeFieldFormat.
+
+func (a *Array) Type(val interface{}) *Array
+    Type adds the val's type using reflection to the array.
+
+func (a *Array) Uint(i uint) *Array
+    Uint appends i as a uint to the array.
+
+func (a *Array) Uint16(i uint16) *Array
+    Uint16 appends i as a uint16 to the array.
+
+func (a *Array) Uint32(i uint32) *Array
+    Uint32 appends i as a uint32 to the array.
+
+func (a *Array) Uint64(i uint64) *Array
+    Uint64 appends i as a uint64 to the array.
+
+func (a *Array) Uint8(i uint8) *Array
+    Uint8 appends i as a uint8 to the array.
+
+type BasicSampler struct {
+	N uint32
+	// Has unexported fields.
+}
+    BasicSampler is a sampler that will send every Nth events, regardless of
+    their level.
+
+func (s *BasicSampler) Sample(lvl Level) bool
+    Sample implements the Sampler interface.
+
+type BurstSampler struct {
+	// Burst is the maximum number of event per period allowed before calling
+	// NextSampler.
+	Burst uint32
+	// Period defines the burst period. If 0, NextSampler is always called.
+	Period time.Duration
+	// NextSampler is the sampler used after the burst is reached. If nil,
+	// events are always rejected after the burst.
+	NextSampler Sampler
+
+	// Has unexported fields.
+}
+    BurstSampler lets Burst events pass per Period then pass the decision to
+    NextSampler. If Sampler is not set, all subsequent events are rejected.
+
+func (s *BurstSampler) Sample(lvl Level) bool
+    Sample implements the Sampler interface.
+
+type ConsoleWriter struct {
+	// Out is the output destination.
+	Out io.Writer
+
+	// NoColor disables the colorized output.
+	NoColor bool
+
+	// TimeFormat specifies the format for timestamp in output.
+	TimeFormat string
+
+	// TimeLocation tells ConsoleWriter’s default FormatTimestamp
+	// how to localize the time.
+	TimeLocation *time.Location
+
+	// PartsOrder defines the order of parts in output.
+	PartsOrder []string
+
+	// PartsExclude defines parts to not display in output.
+	PartsExclude []string
+
+	// FieldsOrder defines the order of contextual fields in output.
+	FieldsOrder []string
+
+	// FieldsExclude defines contextual fields to not display in output.
+	FieldsExclude []string
+
+	FormatTimestamp     Formatter
+	FormatLevel         Formatter
+	FormatCaller        Formatter
+	FormatMessage       Formatter
+	FormatFieldName     Formatter
+	FormatFieldValue    Formatter
+	FormatErrFieldName  Formatter
+	FormatErrFieldValue Formatter
+	// If this is configured it is used for "part" values and
+	// has precedence on FormatFieldValue
+	FormatPartValueByName FormatterByFieldName
+
+	FormatExtra func(map[string]interface{}, *bytes.Buffer) error
+
+	FormatPrepare func(map[string]interface{}) error
+	// Has unexported fields.
+}
+    ConsoleWriter parses the JSON input and writes it in an (optionally)
+    colorized, human-friendly format to Out.
+
+func NewConsoleWriter(options ...func(w *ConsoleWriter)) ConsoleWriter
+    NewConsoleWriter creates and initializes a new ConsoleWriter.
+
+func (w ConsoleWriter) Close() error
+    Call the underlying writer's Close method if it is an io.Closer. Otherwise
+    does nothing.
+
+func (w ConsoleWriter) Write(p []byte) (n int, err error)
+    Write transforms the JSON input with formatters and appends to w.Out.
+
+type Context struct {
+	// Has unexported fields.
+}
+    Context configures a new sub-logger with contextual fields.
+
+func (c Context) AnErr(key string, err error) Context
+    AnErr adds the field key with serialized err to the logger context. If err
+    is nil, no field is added.
+
+func (c Context) Any(key string, i interface{}) Context
+    Any is a wrapper around Context.Interface.
+
+func (c Context) Array(key string, arr LogArrayMarshaler) Context
+    Array adds the field key with an array to the event context. Use
+    c.CreateArray() to create the array or pass a type that implement the
+    LogArrayMarshaler interface.
+
+func (c Context) Bool(key string, b bool) Context
+    Bool adds the field key with val as a bool to the logger context.
+
+func (c Context) Bools(key string, b []bool) Context
+    Bools adds the field key with val as a []bool to the logger context.
+
+func (c Context) Bytes(key string, val []byte) Context
+    Bytes adds the field key with val as a []byte to the logger context.
+
+func (c Context) Caller() Context
+    Caller adds the file:line of the caller with the zerolog.CallerFieldName
+    key.
+
+func (c Context) CallerWithSkipFrameCount(skipFrameCount int) Context
+    CallerWithSkipFrameCount adds the file:line of the caller with the
+    zerolog.CallerFieldName key. The specified skipFrameCount int will override
+    the global CallerSkipFrameCount for this context's respective logger.
+    If set to -1 the global CallerSkipFrameCount will be used.
+
+func (c Context) CreateArray() *Array
+    CreateArray creates an Array to be used with the Context.Array method.
+    It preserves the stack, hooks, and context from the logger. Call usual
+    field methods like Str, Int etc to add elements to this array and give it as
+    argument the Context.Array method.
+
+func (c Context) CreateDict() *Event
+    CreateDict creates an Event to be used with the Context.Dict method.
+    It preserves the stack, hooks, and context from the logger. Call usual
+    field methods like Str, Int etc to add fields to this event and give it as
+    argument the Context.Dict method.
+
+func (c Context) Ctx(ctx context.Context) Context
+    Ctx adds the context.Context to the logger context. The context.Context is
+    not rendered in the error message, but is made available for hooks to use. A
+    typical use case is to extract tracing information from the context.Context.
+
+func (c Context) Dict(key string, dict *Event) Context
+    Dict adds the field key with the dict to the logger context.
+
+func (c Context) Dur(key string, d time.Duration) Context
+    Dur adds the field key with d divided by unit and stored as a float.
+
+func (c Context) Durs(key string, d []time.Duration) Context
+    Durs adds the field key with d divided by unit and stored as a float.
+
+func (c Context) EmbedObject(obj LogObjectMarshaler) Context
+    EmbedObject marshals and Embeds an object that implement the
+    LogObjectMarshaler interface.
+
+func (c Context) Err(err error) Context
+    Err adds the field "error" with serialized err to the logger context.
+
+func (c Context) Errs(key string, errs []error) Context
+    Errs adds the field key with errs as an array of serialized errors to the
+    logger context.
+
+func (c Context) Fields(fields interface{}) Context
+    Fields is a helper function to use a map or slice to set fields using type
+    assertion. Only map[string]interface{} and []interface{} are accepted.
+    []interface{} must alternate string keys and arbitrary values, and
+    extraneous ones are ignored.
+
+func (c Context) Float32(key string, f float32) Context
+    Float32 adds the field key with f as a float32 to the logger context.
+
+func (c Context) Float64(key string, f float64) Context
+    Float64 adds the field key with f as a float64 to the logger context.
+
+func (c Context) Floats32(key string, f []float32) Context
+    Floats32 adds the field key with f as a []float32 to the logger context.
+
+func (c Context) Floats64(key string, f []float64) Context
+    Floats64 adds the field key with f as a []float64 to the logger context.
+
+func (c Context) Hex(key string, val []byte) Context
+    Hex adds the field key with val as a hex string to the logger context.
+
+func (c Context) IPAddr(key string, ip net.IP) Context
+    IPAddr adds adds the field key with ip as a net.IP IPv4 or IPv6 Address to
+    the context
+
+func (c Context) IPAddrs(key string, ip []net.IP) Context
+    IPAddrs adds the field key with ip as a []net.IP array of IPv4 or IPv6
+    Address to the context
+
+func (c Context) IPPrefix(key string, pfx net.IPNet) Context
+    IPPrefix adds adds the field key with pfx as a []net.IPNet IPv4 or IPv6
+    Prefix (address and mask) to the context
+
+func (c Context) IPPrefixes(key string, pfx []net.IPNet) Context
+    IPPrefix adds adds the field key with pfx as a []net.IPNet array of IPv4 or
+    IPv6 Prefix (address and mask) to the context
+
+func (c Context) Int(key string, i int) Context
+    Int adds the field key with i as a int to the logger context.
+
+func (c Context) Int16(key string, i int16) Context
+    Int16 adds the field key with i as a int16 to the logger context.
+
+func (c Context) Int32(key string, i int32) Context
+    Int32 adds the field key with i as a int32 to the logger context.
+
+func (c Context) Int64(key string, i int64) Context
+    Int64 adds the field key with i as a int64 to the logger context.
+
+func (c Context) Int8(key string, i int8) Context
+    Int8 adds the field key with i as a int8 to the logger context.
+
+func (c Context) Interface(key string, i interface{}) Context
+    Interface adds the field key with obj marshaled using reflection.
+
+func (c Context) Ints(key string, i []int) Context
+    Ints adds the field key with i as a []int to the logger context.
+
+func (c Context) Ints16(key string, i []int16) Context
+    Ints16 adds the field key with i as a []int16 to the logger context.
+
+func (c Context) Ints32(key string, i []int32) Context
+    Ints32 adds the field key with i as a []int32 to the logger context.
+
+func (c Context) Ints64(key string, i []int64) Context
+    Ints64 adds the field key with i as a []int64 to the logger context.
+
+func (c Context) Ints8(key string, i []int8) Context
+    Ints8 adds the field key with i as a []int8 to the logger context.
+
+func (c Context) Logger() Logger
+    Logger returns the logger with the context previously set.
+
+func (c Context) MACAddr(key string, ha net.HardwareAddr) Context
+    MACAddr adds adds the field key with ha as a net.HardwareAddr MAC address to
+    the context
+
+func (c Context) Object(key string, obj LogObjectMarshaler) Context
+    Object marshals an object that implement the LogObjectMarshaler interface.
+
+func (c Context) Objects(key string, objs []LogObjectMarshaler) Context
+    Object marshals an object that implement the LogObjectMarshaler interface.
+
+func (c Context) RawJSON(key string, b []byte) Context
+    RawJSON adds already encoded JSON to context.
+
+    No sanity check is performed on b; it must not contain carriage returns and
+    be valid JSON.
+
+func (c Context) Reset() Context
+    Reset removes all the context fields.
+
+func (c Context) Stack() Context
+    Stack enables stack trace printing for the error passed to Err().
+
+func (c Context) Str(key, val string) Context
+    Str adds the field key with val as a string to the logger context.
+
+func (c Context) Stringer(key string, val fmt.Stringer) Context
+    Stringer adds the field key with val.String() (or null if val is nil) to the
+    logger context.
+
+func (c Context) Stringers(key string, vals []fmt.Stringer) Context
+    Stringers adds the field key with vals as an array of strings by calling
+    .String() on each entry to the logger context.
+
+func (c Context) Strs(key string, vals []string) Context
+    Strs adds the field key with val as a string to the logger context.
+
+func (c Context) Time(key string, t time.Time) Context
+    Time adds the field key with t formatted as string using
+    zerolog.TimeFieldFormat.
+
+func (c Context) Times(key string, t []time.Time) Context
+    Times adds the field key with t formatted as string using
+    zerolog.TimeFieldFormat.
+
+func (c Context) Timestamp() Context
+    Timestamp adds the current local time to the logger context with the "time"
+    key, formatted using zerolog.TimeFieldFormat. To customize the key name,
+    change zerolog.TimestampFieldName. To customize the time format, change
+    zerolog.TimeFieldFormat.
+
+    NOTE: It won't dedupe the "time" key if the *Context has one already.
+
+func (c Context) Type(key string, val interface{}) Context
+    Type adds the field key with val's type using reflection.
+
+func (c Context) Uint(key string, i uint) Context
+    Uint adds the field key with i as a uint to the logger context.
+
+func (c Context) Uint16(key string, i uint16) Context
+    Uint16 adds the field key with i as a uint16 to the logger context.
+
+func (c Context) Uint32(key string, i uint32) Context
+    Uint32 adds the field key with i as a uint32 to the logger context.
+
+func (c Context) Uint64(key string, i uint64) Context
+    Uint64 adds the field key with i as a uint64 to the logger context.
+
+func (c Context) Uint8(key string, i uint8) Context
+    Uint8 adds the field key with i as a uint8 to the logger context.
+
+func (c Context) Uints(key string, i []uint) Context
+    Uints adds the field key with i as a []uint to the logger context.
+
+func (c Context) Uints16(key string, i []uint16) Context
+    Uints16 adds the field key with i as a []uint16 to the logger context.
+
+func (c Context) Uints32(key string, i []uint32) Context
+    Uints32 adds the field key with i as a []uint32 to the logger context.
+
+func (c Context) Uints64(key string, i []uint64) Context
+    Uints64 adds the field key with i as a []uint64 to the logger context.
+
+func (c Context) Uints8(key string, i []uint8) Context
+    Uints8 adds the field key with i as a []uint8 to the logger context.
+
+type Event struct {
+	// Has unexported fields.
+}
+    Event represents a log event. It is instanced by one of the level method of
+    Logger and finalized by the Msg or Msgf method.
+
+func Dict() *Event
+    Dict creates an Event to be used with the *Event.Dict method. Call usual
+    field methods like Str, Int etc to add fields to this event and give it as
+    argument the *Event.Dict method. NOTE: This function is deprecated because
+    it does not preserve the stack, hooks, and context from the parent event.
+    Deprecated: Use Event.CreateDict instead.
+
+func (e *Event) AnErr(key string, err error) *Event
+    AnErr adds the field key with serialized err to the *Event context. If err
+    is nil, no field is added.
+
+func (e *Event) Any(key string, i interface{}) *Event
+    Any is a wrapper around Event.Interface.
+
+func (e *Event) Array(key string, arr LogArrayMarshaler) *Event
+    Array adds the field key with an array to the event context. Use
+    e.CreateArray() to create the array or pass a type that implement the
+    LogArrayMarshaler interface.
+
+func (e *Event) Bool(key string, b bool) *Event
+    Bool adds the field key with val as a bool to the *Event context.
+
+func (e *Event) Bools(key string, b []bool) *Event
+    Bools adds the field key with val as a []bool to the *Event context.
+
+func (e *Event) Bytes(key string, val []byte) *Event
+    Bytes adds the field key with val as a string to the *Event context.
+
+    Runes outside of normal ASCII ranges will be hex-encoded in the resulting
+    JSON.
+
+func (e *Event) Caller(skip ...int) *Event
+    Caller adds the file:line of the caller with the zerolog.CallerFieldName
+    key. The argument skip is the number of stack frames to ascend Skip If not
+    passed, use the global variable CallerSkipFrameCount
+
+func (e *Event) CallerSkipFrame(skip int) *Event
+    CallerSkipFrame instructs any future Caller calls to skip the specified
+    number of frames. This includes those added via hooks from the context.
+
+func (e *Event) CreateArray() *Array
+    CreateArray creates an Array to be used with the *Event.Array method.
+    It preserves the stack, hooks, and context from the parent event. Call usual
+    field methods like Str, Int etc to add elements to this array and give it as
+    argument the *Event.Array method.
+
+func (e *Event) CreateDict() *Event
+    CreateDict creates an Event to be used with the *Event.Dict method.
+    It preserves the stack, hooks, and context from the parent event. Call usual
+    field methods like Str, Int etc to add fields to this event and give it as
+    argument the *Event.Dict method.
+
+func (e *Event) Ctx(ctx context.Context) *Event
+    Ctx adds the Go Context to the *Event context. The context is not rendered
+    in the output message, but is available to hooks and to Func() calls via the
+    GetCtx() accessor. A typical use case is to extract tracing information from
+    the Go Ctx.
+
+func (e *Event) Dict(key string, dict *Event) *Event
+    Dict adds the field key with a dict to the event context. Use e.CreateDict()
+    to create the dictionary.
+
+func (e *Event) Discard() *Event
+    Discard disables the event so Msg(f) won't print it.
+
+func (e *Event) Dur(key string, d time.Duration) *Event
+    Dur adds the field key with duration d stored as zerolog.DurationFieldUnit.
+    If zerolog.DurationFieldInteger is true, durations are rendered as integer
+    instead of float.
+
+func (e *Event) Durs(key string, d []time.Duration) *Event
+    Durs adds the field key with duration d stored as zerolog.DurationFieldUnit.
+    If zerolog.DurationFieldInteger is true, durations are rendered as integer
+    instead of float.
+
+func (e *Event) EmbedObject(obj LogObjectMarshaler) *Event
+    EmbedObject marshals an object that implement the LogObjectMarshaler
+    interface.
+
+func (e *Event) Enabled() bool
+    Enabled return false if the *Event is going to be filtered out by log level
+    or sampling.
+
+func (e *Event) Err(err error) *Event
+    Err adds the field "error" with serialized err to the *Event context.
+    If err is nil, no field is added.
+
+    To customize the key name, change zerolog.ErrorFieldName.
+
+    If Stack() has been called before and zerolog.ErrorStackMarshaler is
+    defined, the err is passed to ErrorStackMarshaler and the result is appended
+    to the zerolog.ErrorStackFieldName.
+
+func (e *Event) Errs(key string, errs []error) *Event
+    Errs adds the field key with errs as an array of serialized errors to the
+    *Event context.
+
+func (e *Event) Fields(fields interface{}) *Event
+    Fields is a helper function to use a map or slice to set fields using type
+    assertion. Only map[string]interface{} and []interface{} are accepted.
+    []interface{} must alternate string keys and arbitrary values, and
+    extraneous ones are ignored.
+
+func (e *Event) Float32(key string, f float32) *Event
+    Float32 adds the field key with f as a float32 to the *Event context.
+
+func (e *Event) Float64(key string, f float64) *Event
+    Float64 adds the field key with f as a float64 to the *Event context.
+
+func (e *Event) Floats32(key string, f []float32) *Event
+    Floats32 adds the field key with f as a []float32 to the *Event context.
+
+func (e *Event) Floats64(key string, f []float64) *Event
+    Floats64 adds the field key with f as a []float64 to the *Event context.
+
+func (e *Event) Func(f func(e *Event)) *Event
+    Func allows an anonymous func to run only if the event is enabled.
+
+func (e *Event) GetCtx() context.Context
+    GetCtx retrieves the Go context.Context which is optionally stored in the
+    Event. This allows Hooks and functions passed to Func() to retrieve values
+    which are stored in the context.Context. This can be useful in tracing,
+    where span information is commonly propagated in the context.Context.
+
+func (e *Event) Hex(key string, val []byte) *Event
+    Hex adds the field key with val as a hex string to the *Event context.
+
+func (e *Event) IPAddr(key string, ip net.IP) *Event
+    IPAddr adds the field key with ip as a net.IP IPv4 or IPv6 Address to the
+    event
+
+func (e *Event) IPAddrs(key string, ip []net.IP) *Event
+    IPAddrs adds the field key with ip as a net.IP array of IPv4 or IPv6 Address
+    to the event
+
+func (e *Event) IPPrefix(key string, pfx net.IPNet) *Event
+    IPPrefix adds the field key with pfx as a net.IPNet IPv4 or IPv6 Prefix
+    (address and mask) to the event
+
+func (e *Event) IPPrefixes(key string, pfx []net.IPNet) *Event
+    IPPrefixes the field key with pfx as a net.IPNet array of IPv4 or IPv6
+    Prefixes (address and mask) to the event
+
+func (e *Event) Int(key string, i int) *Event
+    Int adds the field key with i as a int to the *Event context.
+
+func (e *Event) Int16(key string, i int16) *Event
+    Int16 adds the field key with i as a int16 to the *Event context.
+
+func (e *Event) Int32(key string, i int32) *Event
+    Int32 adds the field key with i as a int32 to the *Event context.
+
+func (e *Event) Int64(key string, i int64) *Event
+    Int64 adds the field key with i as a int64 to the *Event context.
+
+func (e *Event) Int8(key string, i int8) *Event
+    Int8 adds the field key with i as a int8 to the *Event context.
+
+func (e *Event) Interface(key string, i interface{}) *Event
+    Interface adds the field key with i marshaled using reflection.
+
+func (e *Event) Ints(key string, i []int) *Event
+    Ints adds the field key with i as a []int to the *Event context.
+
+func (e *Event) Ints16(key string, i []int16) *Event
+    Ints16 adds the field key with i as a []int16 to the *Event context.
+
+func (e *Event) Ints32(key string, i []int32) *Event
+    Ints32 adds the field key with i as a []int32 to the *Event context.
+
+func (e *Event) Ints64(key string, i []int64) *Event
+    Ints64 adds the field key with i as a []int64 to the *Event context.
+
+func (e *Event) Ints8(key string, i []int8) *Event
+    Ints8 adds the field key with i as a []int8 to the *Event context.
+
+func (e *Event) MACAddr(key string, ha net.HardwareAddr) *Event
+    MACAddr the field key with ha as a net.HardwareAddr MAC address to the event
+
+func (e *Event) Msg(msg string)
+    Msg sends the *Event with msg added as the message field if not empty.
+
+    NOTICE: once this method is called, the *Event should be disposed. Calling
+    Msg twice can have unexpected result.
+
+func (e *Event) MsgFunc(createMsg func() string)
+
+func (e *Event) Msgf(format string, v ...interface{})
+    Msgf sends the event with formatted msg added as the message field if not
+    empty.
+
+    NOTICE: once this method is called, the *Event should be disposed. Calling
+    Msgf twice can have unexpected result.
+
+func (e *Event) Object(key string, obj LogObjectMarshaler) *Event
+    Object marshals an object that implement the LogObjectMarshaler interface.
+
+func (e *Event) Objects(key string, objs []LogObjectMarshaler) *Event
+    Objects adds the field key with obj as an array of objects that implement
+    the LogObjectMarshaler interface.
+
+func (e *Event) RawCBOR(key string, b []byte) *Event
+    RawCBOR adds already encoded CBOR to the log line under key.
+
+    No sanity check is performed on b Note: The full featureset of CBOR is
+    supported as data will not be mapped to json but stored as data-url
+
+func (e *Event) RawJSON(key string, b []byte) *Event
+    RawJSON adds already encoded JSON to the log line under key.
+
+    No sanity check is performed on b; it must not contain carriage returns and
+    be valid JSON.
+
+func (e *Event) Send()
+    Send is equivalent to calling Msg("").
+
+    NOTICE: once this method is called, the *Event should be disposed.
+
+func (e *Event) Stack() *Event
+    Stack enables stack trace printing for the error passed to Err().
+
+    ErrorStackMarshaler must be set for this method to do something.
+
+func (e *Event) Str(key, val string) *Event
+    Str adds the field key with val as a string to the *Event context.
+
+func (e *Event) Stringer(key string, val fmt.Stringer) *Event
+    Stringer adds the field key with val.String() (or null if val is nil) to the
+    *Event context.
+
+func (e *Event) Stringers(key string, vals []fmt.Stringer) *Event
+    Stringers adds the field key with vals where each individual val is used as
+    val.String() (or null if val is empty) to the *Event context.
+
+func (e *Event) Strs(key string, vals []string) *Event
+    Strs adds the field key with vals as a []string to the *Event context.
+
+func (e *Event) Time(key string, t time.Time) *Event
+    Time adds the field key with t formatted as string using
+    zerolog.TimeFieldFormat.
+
+func (e *Event) TimeDiff(key string, t time.Time, start time.Time) *Event
+    TimeDiff adds the field key with positive duration between time t and start.
+    If time t is not greater than start, duration will be 0. Duration format
+    follows the same principle as Dur().
+
+func (e *Event) Times(key string, t []time.Time) *Event
+    Times adds the field key with t formatted as string using
+    zerolog.TimeFieldFormat.
+
+func (e *Event) Timestamp() *Event
+    Timestamp adds the current local time as UNIX timestamp to the
+    *Event context with the "time" key. To customize the key name, change
+    zerolog.TimestampFieldName.
+
+    NOTE: It won't dedupe the "time" key if the *Event (or *Context) has one
+    already.
+
+func (e *Event) Type(key string, val interface{}) *Event
+    Type adds the field key with val's type using reflection.
+
+func (e *Event) Uint(key string, i uint) *Event
+    Uint adds the field key with i as a uint to the *Event context.
+
+func (e *Event) Uint16(key string, i uint16) *Event
+    Uint16 adds the field key with i as a uint16 to the *Event context.
+
+func (e *Event) Uint32(key string, i uint32) *Event
+    Uint32 adds the field key with i as a uint32 to the *Event context.
+
+func (e *Event) Uint64(key string, i uint64) *Event
+    Uint64 adds the field key with i as a uint64 to the *Event context.
+
+func (e *Event) Uint8(key string, i uint8) *Event
+    Uint8 adds the field key with i as a uint8 to the *Event context.
+
+func (e *Event) Uints(key string, i []uint) *Event
+    Uints adds the field key with i as a []int to the *Event context.
+
+func (e *Event) Uints16(key string, i []uint16) *Event
+    Uints16 adds the field key with i as a []int16 to the *Event context.
+
+func (e *Event) Uints32(key string, i []uint32) *Event
+    Uints32 adds the field key with i as a []int32 to the *Event context.
+
+func (e *Event) Uints64(key string, i []uint64) *Event
+    Uints64 adds the field key with i as a []int64 to the *Event context.
+
+func (e *Event) Uints8(key string, i []uint8) *Event
+    Uints8 adds the field key with i as a []int8 to the *Event context.
+
+type FilteredLevelWriter struct {
+	Writer LevelWriter
+	Level  Level
+}
+    FilteredLevelWriter writes only logs at Level or above to Writer.
+
+    It should be used only in combination with MultiLevelWriter when you want
+    to write to multiple destinations at different levels. Otherwise you should
+    just set the level on the logger and filter events early. When using
+    MultiLevelWriter then you set the level on the logger to the lowest of the
+    levels you use for writers.
+
+func (w *FilteredLevelWriter) Close() error
+    Call the underlying writer's Close method if it is an io.Closer. Otherwise
+    does nothing.
+
+func (w *FilteredLevelWriter) Write(p []byte) (int, error)
+    Write writes to the underlying Writer.
+
+func (w *FilteredLevelWriter) WriteLevel(level Level, p []byte) (int, error)
+    WriteLevel calls WriteLevel of the underlying Writer only if the level is
+    equal or above the Level.
+
+type Formatter func(interface{}) string
+    Formatter transforms the input into a formatted string.
+
+type FormatterByFieldName func(interface{}, string) string
+    FormatterByFieldName transforms the input into a formatted string, being
+    able to differentiate formatting based on field name.
+
+type Hook interface {
+	// Run runs the hook with the event.
+	Run(e *Event, level Level, message string)
+}
+    Hook defines an interface to a log hook.
+
+type HookFunc func(e *Event, level Level, message string)
+    HookFunc is an adaptor to allow the use of an ordinary function as a Hook.
+
+func (h HookFunc) Run(e *Event, level Level, message string)
+    Run implements the Hook interface.
+
+type Level int8
+    Level defines log levels.
+
+const (
+	// DebugLevel defines debug log level.
+	DebugLevel Level = iota
+	// InfoLevel defines info log level.
+	InfoLevel
+	// WarnLevel defines warn log level.
+	WarnLevel
+	// ErrorLevel defines error log level.
+	ErrorLevel
+	// FatalLevel defines fatal log level.
+	FatalLevel
+	// PanicLevel defines panic log level.
+	PanicLevel
+	// NoLevel defines an absent log level.
+	NoLevel
+	// Disabled disables the logger.
+	Disabled
+
+	// TraceLevel defines trace log level.
+	TraceLevel Level = -1
+)
+func GlobalLevel() Level
+    GlobalLevel returns the current global log level
+
+func ParseLevel(levelStr string) (Level, error)
+    ParseLevel converts a level string into a zerolog Level value. returns an
+    error if the input string does not match known values.
+
+func (l Level) MarshalText() ([]byte, error)
+    MarshalText implements encoding.TextMarshaler to allow for easy writing into
+    toml/yaml/json formats
+
+func (l Level) String() string
+
+func (l *Level) UnmarshalText(text []byte) error
+    UnmarshalText implements encoding.TextUnmarshaler to allow for easy reading
+    from toml/yaml/json formats
+
+type LevelHook struct {
+	NoLevelHook, TraceHook, DebugHook, InfoHook, WarnHook, ErrorHook, FatalHook, PanicHook Hook
+}
+    LevelHook applies a different hook for each level.
+
+func NewLevelHook() LevelHook
+    NewLevelHook returns a new LevelHook.
+
+func (h LevelHook) Run(e *Event, level Level, message string)
+    Run implements the Hook interface.
+
+type LevelSampler struct {
+	TraceSampler, DebugSampler, InfoSampler, WarnSampler, ErrorSampler Sampler
+}
+    LevelSampler applies a different sampler for each level.
+
+func (s LevelSampler) Sample(lvl Level) bool
+
+type LevelWriter interface {
+	io.Writer
+	WriteLevel(level Level, p []byte) (n int, err error)
+}
+    LevelWriter defines as interface a writer may implement in order to receive
+    level information with payload.
+
+func MultiLevelWriter(writers ...io.Writer) LevelWriter
+    MultiLevelWriter creates a writer that duplicates its writes to all the
+    provided writers, similar to the Unix tee(1) command. If some writers
+    implement LevelWriter, their WriteLevel method will be used instead of
+    Write.
+
+func SyslogCEEWriter(w SyslogWriter) LevelWriter
+    SyslogCEEWriter wraps a SyslogWriter with a SyslogLevelWriter
+    that adds a MITRE CEE prefix for JSON syslog entries,
+    compatible with rsyslog and syslog-ng JSON logging support. See
+    https://www.rsyslog.com/json-elasticsearch/
+
+func SyslogLevelWriter(w SyslogWriter) LevelWriter
+    SyslogLevelWriter wraps a SyslogWriter and call the right syslog level
+    method matching the zerolog level.
+
+type LevelWriterAdapter struct {
+	io.Writer
+}
+    LevelWriterAdapter adapts an io.Writer to support the LevelWriter interface.
+
+func (lw LevelWriterAdapter) Close() error
+    Call the underlying writer's Close method if it is an io.Closer. Otherwise
+    does nothing.
+
+func (lw LevelWriterAdapter) WriteLevel(l Level, p []byte) (n int, err error)
+    WriteLevel simply writes everything to the adapted writer, ignoring the
+    level.
+
+type LogArrayMarshaler interface {
+	MarshalZerologArray(a *Array)
+}
+    LogArrayMarshaler provides a strongly-typed and encoding-agnostic interface
+    to be implemented by types used with Event/Context's Array methods.
+
+type LogObjectMarshaler interface {
+	MarshalZerologObject(e *Event)
+}
+    LogObjectMarshaler provides a strongly-typed and encoding-agnostic interface
+    to be implemented by types used with Event/Context's Object methods.
+
+type Logger struct {
+	// Has unexported fields.
+}
+    A Logger represents an active logging object that generates lines of JSON
+    output to an io.Writer. Each logging operation makes a single call to the
+    Writer's Write method. There is no guarantee on access serialization to the
+    Writer. If your Writer is not thread safe, you may consider a sync wrapper.
+
+func Ctx(ctx context.Context) *Logger
+    Ctx returns the Logger associated with the ctx. If no logger is associated,
+    DefaultContextLogger is returned, unless DefaultContextLogger is nil,
+    in which case a disabled logger is returned.
+
+func New(w io.Writer) Logger
+    New creates a root logger with given output writer. If the output writer
+    implements the LevelWriter interface, the WriteLevel method will be called
+    instead of the Write one.
+
+    Each logging operation makes a single call to the Writer's Write method.
+    There is no guarantee on access serialization to the Writer. If your Writer
+    is not thread safe, you may consider using sync wrapper.
+
+func Nop() Logger
+    Nop returns a disabled logger for which all operation are no-op.
+
+func (l *Logger) Debug() *Event
+    Debug starts a new message with debug level.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l *Logger) Err(err error) *Event
+    Err starts a new message with error level with err as a field if not nil or
+    with info level if err is nil.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l *Logger) Error() *Event
+    Error starts a new message with error level.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l *Logger) Fatal() *Event
+    Fatal starts a new message with fatal level. The FatalExitFunc interceptor
+    function is called by the Msg method, which by default terminates
+    the program immediately using os.Exit(1), any desired behavior can be
+    implemented by setting FatalExitFunc.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l Logger) GetLevel() Level
+    GetLevel returns the current Level of l.
+
+func (l Logger) Hook(hooks ...Hook) Logger
+    Hook returns a logger with the h Hook.
+
+func (l *Logger) Info() *Event
+    Info starts a new message with info level.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l Logger) Level(lvl Level) Logger
+    Level creates a child logger with the minimum accepted level set to level.
+
+func (l *Logger) Log() *Event
+    Log starts a new message with no level. Setting GlobalLevel to Disabled will
+    still disable events produced by this method.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l Logger) Output(w io.Writer) Logger
+    Output duplicates the current logger and sets w as its output.
+
+func (l *Logger) Panic() *Event
+    Panic starts a new message with panic level. The panic() function is called
+    by the Msg method, which stops the ordinary flow of a goroutine.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l *Logger) Print(v ...interface{})
+    Print sends a log event using debug level and no extra field. Arguments are
+    handled in the manner of fmt.Print.
+
+func (l *Logger) Printf(format string, v ...interface{})
+    Printf sends a log event using debug level and no extra field. Arguments are
+    handled in the manner of fmt.Printf.
+
+func (l *Logger) Println(v ...interface{})
+    Println sends a log event using debug level and no extra field. Arguments
+    are handled in the manner of fmt.Println.
+
+func (l Logger) Sample(s Sampler) Logger
+    Sample returns a logger with the s sampler.
+
+func (l *Logger) Trace() *Event
+    Trace starts a new message with trace level.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l *Logger) UpdateContext(update func(c Context) Context)
+    UpdateContext updates the internal logger's context.
+
+    Caution: This method is not concurrency safe. Use the With method to create
+    a child logger before modifying the context from concurrent goroutines.
+
+func (l *Logger) Warn() *Event
+    Warn starts a new message with warn level.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l Logger) With() Context
+    With creates a child logger with the field added to its context.
+
+func (l Logger) WithContext(ctx context.Context) context.Context
+    WithContext returns a copy of ctx with the receiver attached. The
+    Logger attached to the provided Context (if any) will not be effected.
+    If the receiver's log level is Disabled it will only be attached to the
+    returned Context if the provided Context has a previously attached Logger.
+    If the provided Context has no attached Logger, a Disabled Logger will not
+    be attached.
+
+    Note: to modify the existing Logger attached to a Context (instead of
+    replacing it in a new Context), use UpdateContext with the following
+    notation:
+
+        ctx := r.Context()
+        l := zerolog.Ctx(ctx)
+        l.UpdateContext(func(c Context) Context {
+            return c.Str("bar", "baz")
+        })
+
+func (l *Logger) WithLevel(level Level) *Event
+    WithLevel starts a new message with level. Unlike Fatal and Panic methods,
+    WithLevel does not terminate the program or stop the ordinary flow of a
+    goroutine when used with their respective levels.
+
+    You must call Msg on the returned event in order to send the event.
+
+func (l Logger) Write(p []byte) (n int, err error)
+    Write implements the io.Writer interface. This is useful to set as a writer
+    for the standard library log.
+
+type RandomSampler uint32
+    RandomSampler use a PRNG to randomly sample an event out of N events,
+    regardless of their level.
+
+func (s RandomSampler) Sample(lvl Level) bool
+    Sample implements the Sampler interface.
+
+type Sampler interface {
+	// Sample returns true if the event should be part of the sample, false if
+	// the event should be dropped.
+	Sample(lvl Level) bool
+}
+    Sampler defines an interface to a log sampler.
+
+type SyslogWriter interface {
+	io.Writer
+	Debug(m string) error
+	Info(m string) error
+	Warning(m string) error
+	Err(m string) error
+	Emerg(m string) error
+	Crit(m string) error
+}
+    SyslogWriter is an interface matching a syslog.Writer struct.
+
+type TestWriter struct {
+	T TestingLog
+
+	// Frame skips caller frames to capture the original file and line numbers.
+	Frame int
+}
+    TestWriter is a writer that writes to testing.TB.
+
+func NewTestWriter(t TestingLog) TestWriter
+    NewTestWriter creates a writer that logs to the testing.TB.
+
+func (t TestWriter) Write(p []byte) (n int, err error)
+    Write to testing.TB.
+
+type TestingLog interface {
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
+	Helper()
+}
+    TestingLog is the logging interface of testing.TB.
+
+type TriggerLevelWriter struct {
+	// Destination writer. If LevelWriter is provided (usually), its WriteLevel is used
+	// instead of Write.
+	io.Writer
+
+	// ConditionalLevel is the level (and below) at which lines are buffered until
+	// a trigger level (or higher) line is emitted. Usually this is set to DebugLevel.
+	ConditionalLevel Level
+
+	// TriggerLevel is the lowest level that triggers the sending of the conditional
+	// level lines. Usually this is set to ErrorLevel.
+	TriggerLevel Level
+
+	// Has unexported fields.
+}
+    TriggerLevelWriter buffers log lines at the ConditionalLevel or below until
+    a trigger level (or higher) line is emitted. Log lines with level higher
+    than ConditionalLevel are always written out to the destination writer.
+    If trigger never happens, buffered log lines are never written out.
+
+    It can be used to configure "log level per request".
+
+func (w *TriggerLevelWriter) Close() error
+    Close closes the writer and returns the buffer to the pool.
+
+func (w *TriggerLevelWriter) Trigger() error
+    Trigger forces flushing the buffer and change the trigger state to
+    triggered, if the writer has not already been triggered before.
+
+func (w *TriggerLevelWriter) WriteLevel(l Level, p []byte) (n int, err error)
+

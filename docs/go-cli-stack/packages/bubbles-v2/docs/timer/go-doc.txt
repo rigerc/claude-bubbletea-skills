@@ -1,0 +1,90 @@
+package timer // import "charm.land/bubbles/v2/timer"
+
+Package timer provides a simple timeout component.
+
+TYPES
+
+type Model struct {
+	// How long until the timer expires.
+	Timeout time.Duration
+
+	// How long to wait before every tick. Defaults to 1 second.
+	Interval time.Duration
+
+	// Has unexported fields.
+}
+    Model of the timer component.
+
+func New(timeout time.Duration, opts ...Option) Model
+    New creates a new timer with the given timeout and default 1s interval.
+
+func (m Model) ID() int
+    ID returns the model's identifier. This can be used to determine if messages
+    belong to this timer instance when there are multiple timers.
+
+func (m Model) Init() tea.Cmd
+    Init starts the timer.
+
+func (m Model) Running() bool
+    Running returns whether or not the timer is running. If the timer has timed
+    out this will always return false.
+
+func (m *Model) Start() tea.Cmd
+    Start resumes the timer. Has no effect if the timer has timed out.
+
+func (m *Model) Stop() tea.Cmd
+    Stop pauses the timer. Has no effect if the timer has timed out.
+
+func (m Model) Timedout() bool
+    Timedout returns whether or not the timer has timed out.
+
+func (m *Model) Toggle() tea.Cmd
+    Toggle stops the timer if it's running and starts it if it's stopped.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update handles the timer tick.
+
+func (m Model) View() string
+    View of the timer component.
+
+type Option func(*Model)
+    Option is a configuration option in New. For example:
+
+        timer := New(time.Second*10, WithInterval(5*time.Second))
+
+func WithInterval(interval time.Duration) Option
+    WithInterval is an option for setting the interval between ticks. Pass as an
+    argument to New.
+
+type StartStopMsg struct {
+	ID int
+	// Has unexported fields.
+}
+    StartStopMsg is used to start and stop the timer.
+
+type TickMsg struct {
+	// ID is the identifier of the timer that sends the message. This makes
+	// it possible to determine which timer a tick belongs to when there
+	// are multiple timers running.
+	//
+	// Note, however, that a timer will reject ticks from other timers, so
+	// it's safe to flow all TickMsgs through all timers and have them still
+	// behave appropriately.
+	ID int
+
+	// Timeout returns whether or not this tick is a timeout tick. You can
+	// alternatively listen for TimeoutMsg.
+	Timeout bool
+
+	// Has unexported fields.
+}
+    TickMsg is a message that is sent on every timer tick.
+
+type TimeoutMsg struct {
+	ID int
+}
+    TimeoutMsg is a message that is sent once when the timer times out.
+
+    It's a convenience message sent alongside a TickMsg with the Timeout value
+    set to true.
+

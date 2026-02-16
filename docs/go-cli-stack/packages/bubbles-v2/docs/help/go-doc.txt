@@ -1,0 +1,90 @@
+package help // import "charm.land/bubbles/v2/help"
+
+Package help provides a simple help view for Bubble Tea applications.
+
+TYPES
+
+type KeyMap interface {
+	// ShortHelp returns a slice of bindings to be displayed in the short
+	// version of the help. The help bubble will render help in the order in
+	// which the help items are returned here.
+	ShortHelp() []key.Binding
+
+	// FullHelp returns an extended group of help items, grouped by columns.
+	// The help bubble will render the help in the order in which the help
+	// items are returned here.
+	FullHelp() [][]key.Binding
+}
+    KeyMap is a map of keybindings used to generate help. Since it's an
+    interface it can be any type, though struct or a map[string][]key.Binding
+    are likely candidates.
+
+    Note that if a key is disabled (via key.Binding.SetEnabled) it will not be
+    rendered in the help view, so in theory generated help should self-manage.
+
+type Model struct {
+	ShowAll bool // if true, render the "full" help menu
+
+	ShortSeparator string
+	FullSeparator  string
+
+	// The symbol we use in the short help when help items have been truncated
+	// due to width. Periods of ellipsis by default.
+	Ellipsis string
+
+	Styles Styles
+
+	// Has unexported fields.
+}
+    Model contains the state of the help view.
+
+func New() Model
+    New creates a new help view with some useful defaults.
+
+func (m Model) FullHelpView(groups [][]key.Binding) string
+    FullHelpView renders help columns from a slice of key binding slices.
+    Each top level slice entry renders into a column.
+
+func (m *Model) SetWidth(w int)
+    SetWidth sets the maximum width for the help view.
+
+func (m Model) ShortHelpView(bindings []key.Binding) string
+    ShortHelpView renders a single line help view from a slice of keybindings.
+    If the line is longer than the maximum width it will be gracefully
+    truncated, showing only as many help items as possible.
+
+func (m Model) Update(_ tea.Msg) (Model, tea.Cmd)
+    Update helps satisfy the Bubble Tea Model interface. It's a no-op.
+
+func (m Model) View(k KeyMap) string
+    View renders the help view's current state.
+
+func (m Model) Width() int
+    Width returns the maximum width for the help view.
+
+type Styles struct {
+	Ellipsis lipgloss.Style
+
+	// Styling for the short help
+	ShortKey       lipgloss.Style
+	ShortDesc      lipgloss.Style
+	ShortSeparator lipgloss.Style
+
+	// Styling for the full help
+	FullKey       lipgloss.Style
+	FullDesc      lipgloss.Style
+	FullSeparator lipgloss.Style
+}
+    Styles is a set of available style definitions for the Help bubble.
+
+func DefaultDarkStyles() Styles
+    DefaultDarkStyles returns a set of default styles for dark backgrounds.
+
+func DefaultLightStyles() Styles
+    DefaultLightStyles returns a set of default styles for light backgrounds.
+
+func DefaultStyles(isDark bool) Styles
+    DefaultStyles returns a set of default styles for the help bubble.
+    Light or dark styles can be selected by passing true or false to the isDark
+    parameter.
+

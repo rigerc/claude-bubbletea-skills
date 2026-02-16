@@ -1,0 +1,462 @@
+package list // import "charm.land/bubbles/v2/list"
+
+Package list provides a feature-rich Bubble Tea component for browsing a general
+purpose list of items. It features optional filtering, pagination, help,
+status messages, and a spinner to indicate activity.
+
+TYPES
+
+type DefaultDelegate struct {
+	ShowDescription bool
+	Styles          DefaultItemStyles
+	UpdateFunc      func(tea.Msg, *Model) tea.Cmd
+	ShortHelpFunc   func() []key.Binding
+	FullHelpFunc    func() [][]key.Binding
+
+	// Has unexported fields.
+}
+    DefaultDelegate is a standard delegate designed to work in lists. It's
+    styled by DefaultItemStyles, which can be customized as you like.
+
+    The description line can be hidden by setting Description to false, which
+    renders the list as single-line-items. The spacing between items can be set
+    with the SetSpacing method.
+
+    Setting UpdateFunc is optional. If it's set it will be called when the
+    ItemDelegate called, which is called when the list's Update function is
+    invoked.
+
+    Settings ShortHelpFunc and FullHelpFunc is optional. They can be set to
+    include items in the list's default short and full help menus.
+
+func NewDefaultDelegate() DefaultDelegate
+    NewDefaultDelegate creates a new delegate with default styles.
+
+func (d DefaultDelegate) FullHelp() [][]key.Binding
+    FullHelp returns the delegate's full help.
+
+func (d DefaultDelegate) Height() int
+    Height returns the delegate's preferred height. This has effect only if
+    ShowDescription is true, otherwise height is always 1.
+
+func (d DefaultDelegate) Render(w io.Writer, m Model, index int, item Item)
+    Render prints an item.
+
+func (d *DefaultDelegate) SetHeight(i int)
+    SetHeight sets delegate's preferred height.
+
+func (d *DefaultDelegate) SetSpacing(i int)
+    SetSpacing sets the delegate's spacing.
+
+func (d DefaultDelegate) ShortHelp() []key.Binding
+    ShortHelp returns the delegate's short help.
+
+func (d DefaultDelegate) Spacing() int
+    Spacing returns the delegate's spacing.
+
+func (d DefaultDelegate) Update(msg tea.Msg, m *Model) tea.Cmd
+    Update checks whether the delegate's UpdateFunc is set and calls it.
+
+type DefaultItem interface {
+	Item
+	Title() string
+	Description() string
+}
+    DefaultItem describes an item designed to work with DefaultDelegate.
+
+type DefaultItemStyles struct {
+	// The Normal state.
+	NormalTitle lipgloss.Style
+	NormalDesc  lipgloss.Style
+
+	// The selected item state.
+	SelectedTitle lipgloss.Style
+	SelectedDesc  lipgloss.Style
+
+	// The dimmed state, for when the filter input is initially activated.
+	DimmedTitle lipgloss.Style
+	DimmedDesc  lipgloss.Style
+
+	// Characters matching the current filter, if any.
+	FilterMatch lipgloss.Style
+}
+    DefaultItemStyles defines styling for a default list item. See
+    DefaultItemView for when these come into play.
+
+func NewDefaultItemStyles(isDark bool) (s DefaultItemStyles)
+    NewDefaultItemStyles returns style definitions for a default item. See
+    DefaultItemView for when these come into play.
+
+type FilterFunc func(string, []string) []Rank
+    FilterFunc takes a term and a list of strings to search through (defined by
+    Item#FilterValue). It should return a sorted list of ranks.
+
+type FilterMatchesMsg []filteredItem
+    FilterMatchesMsg contains data about items matched during filtering.
+    The message should be routed to Update for processing.
+
+type FilterState int
+    FilterState describes the current filtering state on the model.
+
+const (
+	Unfiltered    FilterState = iota // no filter set
+	Filtering                        // user is actively setting a filter
+	FilterApplied                    // a filter is applied and user is not editing filter
+)
+    Possible filter states.
+
+func (f FilterState) String() string
+    String returns a human-readable string of the current filter state.
+
+type Item interface {
+	// FilterValue is the value we use when filtering against this item when
+	// we're filtering the list.
+	FilterValue() string
+}
+    Item is an item that appears in the list.
+
+type ItemDelegate interface {
+	// Render renders the item's view.
+	Render(w io.Writer, m Model, index int, item Item)
+
+	// Height is the height of the list item.
+	Height() int
+
+	// Spacing is the size of the horizontal gap between list items in cells.
+	Spacing() int
+
+	// Update is the update loop for items. All messages in the list's update
+	// loop will pass through here except when the user is setting a filter.
+	// Use this method to perform item-level updates appropriate to this
+	// delegate.
+	Update(msg tea.Msg, m *Model) tea.Cmd
+}
+    ItemDelegate encapsulates the general functionality for all list items. The
+    benefit to separating this logic from the item itself is that you can change
+    the functionality of items without changing the actual items themselves.
+
+    Note that if the delegate also implements help.KeyMap delegate-related help
+    items will be added to the help view.
+
+type KeyMap struct {
+	// Keybindings used when browsing the list.
+	CursorUp    key.Binding
+	CursorDown  key.Binding
+	NextPage    key.Binding
+	PrevPage    key.Binding
+	GoToStart   key.Binding
+	GoToEnd     key.Binding
+	Filter      key.Binding
+	ClearFilter key.Binding
+
+	// Keybindings used when setting a filter.
+	CancelWhileFiltering key.Binding
+	AcceptWhileFiltering key.Binding
+
+	// Help toggle keybindings.
+	ShowFullHelp  key.Binding
+	CloseFullHelp key.Binding
+
+	// The quit keybinding. This won't be caught when filtering.
+	Quit key.Binding
+
+	// The quit-no-matter-what keybinding. This will be caught when filtering.
+	ForceQuit key.Binding
+}
+    KeyMap defines keybindings. It satisfies to the help.KeyMap interface,
+    which is used to render the menu.
+
+func DefaultKeyMap() KeyMap
+    DefaultKeyMap returns a default set of keybindings.
+
+type Model struct {
+	Title             string
+	Styles            Styles
+	InfiniteScrolling bool
+
+	// Key mappings for navigating the list.
+	KeyMap KeyMap
+
+	// Filter is used to filter the list.
+	Filter FilterFunc
+
+	// Additional key mappings for the short and full help views. This allows
+	// you to add additional key mappings to the help menu without
+	// re-implementing the help component. Of course, you can also disable the
+	// list's help component and implement a new one if you need more
+	// flexibility.
+	AdditionalShortHelpKeys func() []key.Binding
+	AdditionalFullHelpKeys  func() []key.Binding
+
+	Paginator paginator.Model
+
+	Help        help.Model
+	FilterInput textinput.Model
+
+	// How long status messages should stay visible. By default this is
+	// 1 second.
+	StatusMessageLifetime time.Duration
+
+	// Has unexported fields.
+}
+    Model contains the state of this component.
+
+func New(items []Item, delegate ItemDelegate, width, height int) Model
+    New returns a new model with sensible defaults.
+
+func (m Model) Cursor() int
+    Cursor returns the index of the cursor on the current page.
+
+func (m *Model) CursorDown()
+    CursorDown moves the cursor down. This can also advance the state to the
+    next page.
+
+func (m *Model) CursorUp()
+    CursorUp moves the cursor up. This can also move the state to the previous
+    page.
+
+func (m *Model) DisableQuitKeybindings()
+    DisableQuitKeybindings is a helper for disabling the keybindings used for
+    quitting, in case you want to handle this elsewhere in your application.
+
+func (m Model) FilterState() FilterState
+    FilterState returns the current filter state.
+
+func (m Model) FilterValue() string
+    FilterValue returns the current value of the filter.
+
+func (m Model) FilteringEnabled() bool
+    FilteringEnabled returns whether or not filtering is enabled.
+
+func (m Model) FullHelp() [][]key.Binding
+    FullHelp returns bindings to show the full help view. It's part of the
+    help.KeyMap interface.
+
+func (m Model) GlobalIndex() int
+    GlobalIndex returns the index of the currently selected item as it is stored
+    in the unfiltered list of items. This value can be used with SetItem().
+
+func (m *Model) GoToEnd()
+    GoToEnd moves to the last page, and last item on the last page.
+
+func (m *Model) GoToStart()
+    GoToStart moves to the first page, and first item on the first page.
+
+func (m Model) Height() int
+    Height returns the current height setting.
+
+func (m Model) Index() int
+    Index returns the index of the currently selected item as it is stored
+    in the filtered list of items. Using this value with SetItem() might be
+    incorrect, consider using GlobalIndex() instead.
+
+func (m *Model) InsertItem(index int, item Item) tea.Cmd
+    InsertItem inserts an item at the given index. If the index is out of the
+    upper bound, the item will be appended. This returns a command.
+
+func (m Model) IsFiltered() bool
+    IsFiltered returns whether or not the list is currently filtered. It's
+    purely a convenience method for the following:
+
+        m.FilterState() == FilterApplied
+
+func (m Model) Items() []Item
+    Items returns the items in the list.
+
+func (m Model) MatchesForItem(index int) []int
+    MatchesForItem returns rune positions matched by the current filter, if any.
+    Use this to style runes matched by the active filter.
+
+    See DefaultItemView for a usage example.
+
+func (m *Model) NewStatusMessage(s string) tea.Cmd
+    NewStatusMessage sets a new status message, which will show for a limited
+    amount of time. Note that this also returns a command.
+
+func (m *Model) NextPage()
+    NextPage moves to the next page, if available.
+
+func (m *Model) PrevPage()
+    PrevPage moves to the previous page, if available.
+
+func (m *Model) RemoveItem(index int)
+    RemoveItem removes an item at the given index. If the index is out of bounds
+    this will be a no-op. O(n) complexity, which probably won't matter in the
+    case of a TUI.
+
+func (m *Model) ResetFilter()
+    ResetFilter resets the current filtering state.
+
+func (m *Model) ResetSelected()
+    ResetSelected resets the selected item to the first item in the first page
+    of the list.
+
+func (m *Model) Select(index int)
+    Select selects the given index of the list and goes to its respective page.
+
+func (m Model) SelectedItem() Item
+    SelectedItem returns the current selected item in the list.
+
+func (m *Model) SetDelegate(d ItemDelegate)
+    SetDelegate sets the item delegate.
+
+func (m *Model) SetFilterState(state FilterState)
+    SetFilterState allows setting the filtering state manually.
+
+func (m *Model) SetFilterText(filter string)
+    SetFilterText explicitly sets the filter text without relying on user input.
+    It also sets the filterState to a sane default of FilterApplied, but this
+    can be changed with SetFilterState.
+
+func (m *Model) SetFilteringEnabled(v bool)
+    SetFilteringEnabled enables or disables filtering. Note that this is
+    different from ShowFilter, which merely hides or shows the input view.
+
+func (m *Model) SetHeight(v int)
+    SetHeight sets the height of this component.
+
+func (m *Model) SetItem(index int, item Item) tea.Cmd
+    SetItem replaces an item at the given index. This returns a command.
+
+func (m *Model) SetItems(i []Item) tea.Cmd
+    SetItems sets the items available in the list. This returns a command.
+
+func (m *Model) SetShowFilter(v bool)
+    SetShowFilter shows or hides the filter bar. Note that this does not disable
+    filtering, it simply hides the built-in filter view. This allows you to use
+    the FilterInput to render the filtering UI differently without having to
+    re-implement filtering from scratch.
+
+    To disable filtering entirely use EnableFiltering.
+
+func (m *Model) SetShowHelp(v bool)
+    SetShowHelp shows or hides the help view.
+
+func (m *Model) SetShowPagination(v bool)
+    SetShowPagination hides or shows the paginator. Note that pagination will
+    still be active, it simply won't be displayed.
+
+func (m *Model) SetShowStatusBar(v bool)
+    SetShowStatusBar shows or hides the view that displays metadata about the
+    list, such as item counts.
+
+func (m *Model) SetShowTitle(v bool)
+    SetShowTitle shows or hides the title bar.
+
+func (m *Model) SetSize(width, height int)
+    SetSize sets the width and height of this component.
+
+func (m *Model) SetSpinner(spinner spinner.Spinner)
+    SetSpinner allows to set the spinner style.
+
+func (m *Model) SetStatusBarItemName(singular, plural string)
+    SetStatusBarItemName defines a replacement for the item's identifier.
+    Defaults to item/items.
+
+func (m *Model) SetWidth(v int)
+    SetWidth sets the width of this component.
+
+func (m Model) SettingFilter() bool
+    SettingFilter returns whether or not the user is currently editing the
+    filter value. It's purely a convenience method for the following:
+
+        m.FilterState() == Filtering
+
+    It's included here because it's a common thing to check for when
+    implementing this component.
+
+func (m Model) ShortHelp() []key.Binding
+    ShortHelp returns bindings to show in the abbreviated help view. It's part
+    of the help.KeyMap interface.
+
+func (m Model) ShowFilter() bool
+    ShowFilter returns whether or not the filter is set to be rendered.
+    Note that this is separate from FilteringEnabled, so filtering can be hidden
+    yet still invoked. This allows you to render filtering differently without
+    having to re-implement it from scratch.
+
+func (m Model) ShowHelp() bool
+    ShowHelp returns whether or not the help is set to be rendered.
+
+func (m *Model) ShowPagination() bool
+    ShowPagination returns whether the pagination is visible.
+
+func (m Model) ShowStatusBar() bool
+    ShowStatusBar returns whether or not the status bar is set to be rendered.
+
+func (m Model) ShowTitle() bool
+    ShowTitle returns whether or not the title bar is set to be rendered.
+
+func (m *Model) StartSpinner() tea.Cmd
+    StartSpinner starts the spinner. Note that this returns a command.
+
+func (m Model) StatusBarItemName() (string, string)
+    StatusBarItemName returns singular and plural status bar item names.
+
+func (m *Model) StopSpinner()
+    StopSpinner stops the spinner.
+
+func (m *Model) ToggleSpinner() tea.Cmd
+    ToggleSpinner toggles the spinner. Note that this also returns a command.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update is the Bubble Tea update loop.
+
+func (m Model) View() string
+    View renders the component.
+
+func (m Model) VisibleItems() []Item
+    VisibleItems returns the total items available to be shown.
+
+func (m Model) Width() int
+    Width returns the current width setting.
+
+type Rank struct {
+	// The index of the item in the original input.
+	Index int
+	// Indices of the actual word that were matched against the filter term.
+	MatchedIndexes []int
+}
+    Rank defines a rank for a given item.
+
+func DefaultFilter(term string, targets []string) []Rank
+    DefaultFilter uses the sahilm/fuzzy to filter through the list. This is set
+    by default.
+
+func UnsortedFilter(term string, targets []string) []Rank
+    UnsortedFilter uses the sahilm/fuzzy to filter through the list. It does not
+    sort the results.
+
+type Styles struct {
+	TitleBar lipgloss.Style
+	Title    lipgloss.Style
+	Spinner  lipgloss.Style
+	Filter   textinput.Styles
+
+	// Default styling for matched characters in a filter. This can be
+	// overridden by delegates.
+	DefaultFilterCharacterMatch lipgloss.Style
+
+	StatusBar             lipgloss.Style
+	StatusEmpty           lipgloss.Style
+	StatusBarActiveFilter lipgloss.Style
+	StatusBarFilterCount  lipgloss.Style
+
+	NoItems lipgloss.Style
+
+	PaginationStyle lipgloss.Style
+	HelpStyle       lipgloss.Style
+
+	// Styled characters.
+	ActivePaginationDot   lipgloss.Style
+	InactivePaginationDot lipgloss.Style
+	ArabicPagination      lipgloss.Style
+	DividerDot            lipgloss.Style
+}
+    Styles contains style definitions for this list component. By default,
+    these values are generated by DefaultStyles.
+
+func DefaultStyles(isDark bool) (s Styles)
+    DefaultStyles returns a set of default style definitions for this list
+    component.
+

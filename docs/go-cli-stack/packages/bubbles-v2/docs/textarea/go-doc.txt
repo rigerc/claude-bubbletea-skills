@@ -1,0 +1,340 @@
+package textarea // import "charm.land/bubbles/v2/textarea"
+
+Package textarea provides a multi-line text input component for Bubble Tea
+applications.
+
+FUNCTIONS
+
+func Blink() tea.Msg
+    Blink returns the blink command for the virtual cursor.
+
+func Paste() tea.Msg
+    Paste is a command for pasting from the clipboard into the text input.
+
+
+TYPES
+
+type CursorStyle struct {
+	// Style styles the cursor block.
+	//
+	// For real cursors, the foreground color set here will be used as the
+	// cursor color.
+	Color color.Color
+
+	// Shape is the cursor shape. The following shapes are available:
+	//
+	// - tea.CursorBlock
+	// - tea.CursorUnderline
+	// - tea.CursorBar
+	//
+	// This is only used for real cursors.
+	Shape tea.CursorShape
+
+	// CursorBlink determines whether or not the cursor should blink.
+	Blink bool
+
+	// BlinkSpeed is the speed at which the virtual cursor blinks. This has no
+	// effect on real cursors as well as no effect if the cursor is set not to
+	// [CursorBlink].
+	//
+	// By default, the blink speed is set to about 500ms.
+	BlinkSpeed time.Duration
+}
+    CursorStyle is the style for real and virtual cursors.
+
+type KeyMap struct {
+	CharacterBackward       key.Binding
+	CharacterForward        key.Binding
+	DeleteAfterCursor       key.Binding
+	DeleteBeforeCursor      key.Binding
+	DeleteCharacterBackward key.Binding
+	DeleteCharacterForward  key.Binding
+	DeleteWordBackward      key.Binding
+	DeleteWordForward       key.Binding
+	InsertNewline           key.Binding
+	LineEnd                 key.Binding
+	LineNext                key.Binding
+	LinePrevious            key.Binding
+	LineStart               key.Binding
+	PageUp                  key.Binding
+	PageDown                key.Binding
+	Paste                   key.Binding
+	WordBackward            key.Binding
+	WordForward             key.Binding
+	InputBegin              key.Binding
+	InputEnd                key.Binding
+
+	UppercaseWordForward  key.Binding
+	LowercaseWordForward  key.Binding
+	CapitalizeWordForward key.Binding
+
+	TransposeCharacterBackward key.Binding
+}
+    KeyMap is the key bindings for different actions within the textarea.
+
+func DefaultKeyMap() KeyMap
+    DefaultKeyMap returns the default set of key bindings for navigating and
+    acting upon the textarea.
+
+type LineInfo struct {
+	// Width is the number of columns in the line.
+	Width int
+
+	// CharWidth is the number of characters in the line to account for
+	// double-width runes.
+	CharWidth int
+
+	// Height is the number of rows in the line.
+	Height int
+
+	// StartColumn is the index of the first column of the line.
+	StartColumn int
+
+	// ColumnOffset is the number of columns that the cursor is offset from the
+	// start of the line.
+	ColumnOffset int
+
+	// RowOffset is the number of rows that the cursor is offset from the start
+	// of the line.
+	RowOffset int
+
+	// CharOffset is the number of characters that the cursor is offset
+	// from the start of the line. This will generally be equivalent to
+	// ColumnOffset, but will be different there are double-width runes before
+	// the cursor.
+	CharOffset int
+}
+    LineInfo is a helper for keeping track of line information regarding
+    soft-wrapped lines.
+
+type Model struct {
+	Err error
+
+	// Prompt is printed at the beginning of each line.
+	//
+	// When changing the value of Prompt after the model has been
+	// initialized, ensure that SetWidth() gets called afterwards.
+	//
+	// See also [SetPromptFunc] for a dynamic prompt.
+	Prompt string
+
+	// Placeholder is the text displayed when the user
+	// hasn't entered anything yet.
+	Placeholder string
+
+	// ShowLineNumbers, if enabled, causes line numbers to be printed
+	// after the prompt.
+	ShowLineNumbers bool
+
+	// EndOfBufferCharacter is displayed at the end of the input.
+	EndOfBufferCharacter rune
+
+	// KeyMap encodes the keybindings recognized by the widget.
+	KeyMap KeyMap
+
+	// CharLimit is the maximum number of characters this input element will
+	// accept. If 0 or less, there's no limit.
+	CharLimit int
+
+	// MaxHeight is the maximum height of the text area in rows. If 0 or less,
+	// there's no limit.
+	MaxHeight int
+
+	// MaxWidth is the maximum width of the text area in columns. If 0 or less,
+	// there's no limit.
+	MaxWidth int
+
+	// Has unexported fields.
+}
+    Model is the Bubble Tea model for this text area element.
+
+func New() Model
+    New creates a new model with default settings.
+
+func (m *Model) Blur()
+    Blur removes the focus state on the model. When the model is blurred it can
+    not receive keyboard input and the cursor will be hidden.
+
+func (m Model) Column() int
+    Column returns the 0-indexed column position of the cursor.
+
+func (m Model) Cursor() *tea.Cursor
+    Cursor returns a tea.Cursor for rendering a real cursor in a Bubble Tea
+    program. This requires that Model.VirtualCursor is set to false.
+
+    Note that you will almost certainly also need to adjust the offset cursor
+    position per the textarea's per the textarea's position in the terminal.
+
+    Example:
+
+        // In your top-level View function:
+        f := tea.NewFrame(m.textarea.View())
+        f.Cursor = m.textarea.Cursor()
+        f.Cursor.Position.X += offsetX
+        f.Cursor.Position.Y += offsetY
+
+func (m *Model) CursorDown()
+    CursorDown moves the cursor down by one line.
+
+func (m *Model) CursorEnd()
+    CursorEnd moves the cursor to the end of the input field.
+
+func (m *Model) CursorStart()
+    CursorStart moves the cursor to the start of the input field.
+
+func (m *Model) CursorUp()
+    CursorUp moves the cursor up by one line.
+
+func (m *Model) Focus() tea.Cmd
+    Focus sets the focus state on the model. When the model is in focus it can
+    receive keyboard input and the cursor will be hidden.
+
+func (m Model) Focused() bool
+    Focused returns the focus state on the model.
+
+func (m Model) Height() int
+    Height returns the current height of the textarea.
+
+func (m *Model) InsertRune(r rune)
+    InsertRune inserts a rune at the cursor position.
+
+func (m *Model) InsertString(s string)
+    InsertString inserts a string at the cursor position.
+
+func (m *Model) Length() int
+    Length returns the number of characters currently in the text input.
+
+func (m Model) Line() int
+    Line returns the 0-indexed row position of the cursor.
+
+func (m *Model) LineCount() int
+    LineCount returns the number of lines that are currently in the text input.
+
+func (m Model) LineInfo() LineInfo
+    LineInfo returns the number of characters from the start of the
+    (soft-wrapped) line and the (soft-wrapped) line width.
+
+func (m *Model) MoveToBegin()
+    MoveToBegin moves the cursor to the beginning of the input.
+
+func (m *Model) MoveToEnd()
+    MoveToEnd moves the cursor to the end of the input.
+
+func (m *Model) PageDown()
+    PageDown moves the cursor down by one page. First call snaps to the last
+    visible line, subsequent calls move down by a full page.
+
+func (m *Model) PageUp()
+    PageUp moves the cursor up by one page. First call snaps to the first
+    visible line, subsequent calls move up by a full page.
+
+func (m *Model) Reset()
+    Reset sets the input to its default state with no input.
+
+func (m Model) ScrollPercent() float64
+    ScrollPercent returns the amount of the textarea that is currently scrolled
+    through, clamped between 0 and 1.
+
+func (m Model) ScrollYOffset() int
+    ScrollYOffset returns the Y offset (top row) index of the current view,
+    which can be used to calculate the current scroll position.
+
+func (m *Model) SetCursorColumn(col int)
+    SetCursorColumn moves the cursor to the given position. If the position is
+    out of bounds the cursor will be moved to the start or end accordingly.
+
+func (m *Model) SetHeight(h int)
+    SetHeight sets the height of the textarea.
+
+func (m *Model) SetPromptFunc(promptWidth int, fn func(PromptInfo) string)
+    SetPromptFunc supersedes the Prompt field and sets a dynamic prompt instead.
+
+    If the function returns a prompt that is shorter than the specified
+    promptWidth, it will be padded to the left. If it returns a prompt that is
+    longer, display artifacts may occur; the caller is responsible for computing
+    an adequate promptWidth.
+
+func (m *Model) SetStyles(s Styles)
+    SetStyles updates styling for the textarea.
+
+func (m *Model) SetValue(s string)
+    SetValue sets the value of the text input.
+
+func (m *Model) SetVirtualCursor(v bool)
+    SetVirtualCursor sets whether or not to use the virtual cursor.
+
+func (m *Model) SetWidth(w int)
+    SetWidth sets the width of the textarea to fit exactly within the given
+    width. This means that the textarea will account for the width of the prompt
+    and whether or not line numbers are being shown.
+
+    Ensure that SetWidth is called after setting the Prompt and ShowLineNumbers,
+    It is important that the width of the textarea be exactly the given width
+    and no more.
+
+func (m Model) Styles() Styles
+    Styles returns the current styles for the textarea.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update is the Bubble Tea update loop.
+
+func (m Model) Value() string
+    Value returns the value of the text input.
+
+func (m Model) View() string
+    View renders the text area in its current state.
+
+func (m Model) VirtualCursor() bool
+    VirtualCursor returns whether or not the virtual cursor is enabled.
+
+func (m Model) Width() int
+    Width returns the width of the textarea.
+
+func (m *Model) Word() string
+    Word returns the word at the cursor position. A word is delimited by spaces
+    or line-breaks.
+
+type PromptInfo struct {
+	LineNumber int
+	Focused    bool
+}
+    PromptInfo is a struct that can be used to store information about the
+    prompt.
+
+type StyleState struct {
+	Base             lipgloss.Style
+	Text             lipgloss.Style
+	LineNumber       lipgloss.Style
+	CursorLineNumber lipgloss.Style
+	CursorLine       lipgloss.Style
+	EndOfBuffer      lipgloss.Style
+	Placeholder      lipgloss.Style
+	Prompt           lipgloss.Style
+}
+    StyleState that will be applied to the text area.
+
+    StyleState can be applied to focused and unfocused states to change the
+    styles depending on the focus state.
+
+    For an introduction to styling with Lip Gloss see:
+    https://github.com/charmbracelet/lipgloss
+
+type Styles struct {
+	Focused StyleState
+	Blurred StyleState
+	Cursor  CursorStyle
+}
+    Styles are the styles for the textarea, separated into focused and blurred
+    states. The appropriate styles will be chosen based on the focus state of
+    the textarea.
+
+func DefaultDarkStyles() Styles
+    DefaultDarkStyles returns the default styles for a dark background.
+
+func DefaultLightStyles() Styles
+    DefaultLightStyles returns the default styles for a light background.
+
+func DefaultStyles(isDark bool) Styles
+    DefaultStyles returns the default styles for focused and blurred states for
+    the textarea.
+

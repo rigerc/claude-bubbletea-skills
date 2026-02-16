@@ -1,0 +1,4 @@
+package bubbles // import "charm.land/bubbles/v2"
+
+Package bubbles provides some components for Bubble Tea applications. These
+components are used in production in Glow, Charm and many other applications.

@@ -1,0 +1,126 @@
+package spinner // import "charm.land/bubbles/v2/spinner"
+
+Package spinner provides a spinner component for Bubble Tea applications.
+
+VARIABLES
+
+var (
+	Line = Spinner{
+		Frames: []string{"|", "/", "-", "\\"},
+		FPS:    time.Second / 10,
+	}
+	Dot = Spinner{
+		Frames: []string{"⣾ ", "⣽ ", "⣻ ", "⢿ ", "⡿ ", "⣟ ", "⣯ ", "⣷ "},
+		FPS:    time.Second / 10,
+	}
+	MiniDot = Spinner{
+		Frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+		FPS:    time.Second / 12,
+	}
+	Jump = Spinner{
+		Frames: []string{"⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"},
+		FPS:    time.Second / 10,
+	}
+	Pulse = Spinner{
+		Frames: []string{"█", "▓", "▒", "░"},
+		FPS:    time.Second / 8,
+	}
+	Points = Spinner{
+		Frames: []string{"∙∙∙", "●∙∙", "∙●∙", "∙∙●"},
+		FPS:    time.Second / 7,
+	}
+	Globe = Spinner{
+		Frames: []string{"🌍", "🌎", "🌏"},
+		FPS:    time.Second / 4,
+	}
+	Moon = Spinner{
+		Frames: []string{"🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"},
+		FPS:    time.Second / 8,
+	}
+	Monkey = Spinner{
+		Frames: []string{"🙈", "🙉", "🙊"},
+		FPS:    time.Second / 3,
+	}
+	Meter = Spinner{
+		Frames: []string{
+			"▱▱▱",
+			"▰▱▱",
+			"▰▰▱",
+			"▰▰▰",
+			"▰▰▱",
+			"▰▱▱",
+			"▱▱▱",
+		},
+		FPS: time.Second / 7,
+	}
+	Hamburger = Spinner{
+		Frames: []string{"☱", "☲", "☴", "☲"},
+		FPS:    time.Second / 3,
+	}
+	Ellipsis = Spinner{
+		Frames: []string{"", ".", "..", "..."},
+		FPS:    time.Second / 3,
+	}
+)
+    Some spinners to choose from. You could also make your own.
+
+
+TYPES
+
+type Model struct {
+	// Spinner settings to use. See type Spinner.
+	Spinner Spinner
+
+	// Style sets the styling for the spinner. Most of the time you'll just
+	// want foreground and background coloring, and potentially some padding.
+	//
+	// For an introduction to styling with Lip Gloss see:
+	// https://github.com/charmbracelet/lipgloss
+	Style lipgloss.Style
+
+	// Has unexported fields.
+}
+    Model contains the state for the spinner. Use New to create new models
+    rather than using Model as a struct literal.
+
+func New(opts ...Option) Model
+    New returns a model with default values.
+
+func (m Model) ID() int
+    ID returns the spinner's unique ID.
+
+func (m Model) Tick() tea.Msg
+    Tick is the command used to advance the spinner one frame. Use this command
+    to effectively start the spinner.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update is the Tea update function.
+
+func (m Model) View() string
+    View renders the model's view.
+
+type Option func(*Model)
+    Option is used to set options in New. For example:
+
+        spinner := New(WithSpinner(Dot))
+
+func WithSpinner(spinner Spinner) Option
+    WithSpinner is an option to set the spinner. Pass this to [Spinner.New].
+
+func WithStyle(style lipgloss.Style) Option
+    WithStyle is an option to set the spinner style. Pass this to [Spinner.New].
+
+type Spinner struct {
+	Frames []string
+	FPS    time.Duration
+}
+    Spinner is a set of frames used in animating the spinner.
+
+type TickMsg struct {
+	Time time.Time
+
+	ID int
+	// Has unexported fields.
+}
+    TickMsg indicates that the timer has ticked and we should render a frame.
+

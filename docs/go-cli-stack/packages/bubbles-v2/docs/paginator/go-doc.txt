@@ -1,0 +1,100 @@
+package paginator // import "charm.land/bubbles/v2/paginator"
+
+Package paginator provides a Bubble Tea package for calculating pagination and
+rendering pagination info. Note that this package does not render actual pages:
+it's purely for handling keystrokes related to pagination, and rendering
+pagination status.
+
+TYPES
+
+type KeyMap struct {
+	PrevPage key.Binding
+	NextPage key.Binding
+}
+    KeyMap is the key bindings for different actions within the paginator.
+
+func DefaultKeyMap() KeyMap
+    DefaultKeyMap is the default set of key bindings for navigating and acting
+    upon the paginator.
+
+type Model struct {
+	// Type configures how the pagination is rendered (Arabic, Dots).
+	Type Type
+	// Page is the current page number.
+	Page int
+	// PerPage is the number of items per page.
+	PerPage int
+	// TotalPages is the total number of pages.
+	TotalPages int
+	// ActiveDot is used to mark the current page under the Dots display type.
+	ActiveDot string
+	// InactiveDot is used to mark inactive pages under the Dots display type.
+	InactiveDot string
+	// ArabicFormat is the printf-style format to use for the Arabic display type.
+	ArabicFormat string
+
+	// KeyMap encodes the keybindings recognized by the widget.
+	KeyMap KeyMap
+}
+    Model is the Bubble Tea model for this user interface.
+
+func New(opts ...Option) Model
+    New creates a new model with defaults.
+
+func (m *Model) GetSliceBounds(length int) (start int, end int)
+    GetSliceBounds is a helper function for paginating slices. Pass the length
+    of the slice you're rendering and you'll receive the start and end bounds
+    corresponding to the pagination. For example:
+
+        bunchOfStuff := []stuff{...}
+        start, end := model.GetSliceBounds(len(bunchOfStuff))
+        sliceToRender := bunchOfStuff[start:end]
+
+func (m Model) ItemsOnPage(totalItems int) int
+    ItemsOnPage is a helper function for returning the number of items on the
+    current page given the total number of items passed as an argument.
+
+func (m *Model) NextPage()
+    NextPage is a helper function for navigating one page forward. It will not
+    page beyond the last page (i.e. totalPages - 1).
+
+func (m Model) OnFirstPage() bool
+    OnFirstPage returns whether or not we're on the first page.
+
+func (m Model) OnLastPage() bool
+    OnLastPage returns whether or not we're on the last page.
+
+func (m *Model) PrevPage()
+    PrevPage is a helper function for navigating one page backward. It will not
+    page beyond the first page (i.e. page 0).
+
+func (m *Model) SetTotalPages(items int) int
+    SetTotalPages is a helper function for calculating the total number of pages
+    from a given number of items. Its use is optional since this pager can be
+    used for other things beyond navigating sets. Note that it both returns the
+    number of total pages and alters the model.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update is the Tea update function which binds keystrokes to pagination.
+
+func (m Model) View() string
+    View renders the pagination to a string.
+
+type Option func(*Model)
+    Option is used to set options in New.
+
+func WithPerPage(perPage int) Option
+    WithPerPage sets the total pages.
+
+func WithTotalPages(totalPages int) Option
+    WithTotalPages sets the total pages.
+
+type Type int
+    Type specifies the way we render pagination.
+
+const (
+	Arabic Type = iota
+	Dots
+)
+    Pagination rendering options.
+

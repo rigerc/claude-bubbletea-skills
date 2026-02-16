@@ -1,0 +1,238 @@
+package textinput // import "charm.land/bubbles/v2/textinput"
+
+Package textinput provides a text input component for Bubble Tea applications.
+
+FUNCTIONS
+
+func Blink() tea.Msg
+    Blink is a command used to initialize cursor blinking.
+
+func Paste() tea.Msg
+    Paste is a command for pasting from the clipboard into the text input.
+
+
+TYPES
+
+type CursorStyle struct {
+	// Style styles the cursor block.
+	//
+	// For real cursors, the foreground color set here will be used as the
+	// cursor color.
+	Color color.Color
+
+	// Shape is the cursor shape. The following shapes are available:
+	//
+	// - tea.CursorBlock
+	// - tea.CursorUnderline
+	// - tea.CursorBar
+	//
+	// This is only used for real cursors.
+	Shape tea.CursorShape
+
+	// CursorBlink determines whether or not the cursor should blink.
+	Blink bool
+
+	// BlinkSpeed is the speed at which the virtual cursor blinks. This has no
+	// effect on real cursors as well as no effect if the cursor is set not to
+	// [CursorBlink].
+	//
+	// By default, the blink speed is set to about 500ms.
+	BlinkSpeed time.Duration
+}
+    CursorStyle is the style for real and virtual cursors.
+
+type EchoMode int
+    EchoMode sets the input behavior of the text input field.
+
+const (
+	// EchoNormal displays text as is. This is the default behavior.
+	EchoNormal EchoMode = iota
+
+	// EchoPassword displays the EchoCharacter mask instead of actual
+	// characters. This is commonly used for password fields.
+	EchoPassword
+
+	// EchoNone displays nothing as characters are entered. This is commonly
+	// seen for password fields on the command line.
+	EchoNone
+)
+type KeyMap struct {
+	CharacterForward        key.Binding
+	CharacterBackward       key.Binding
+	WordForward             key.Binding
+	WordBackward            key.Binding
+	DeleteWordBackward      key.Binding
+	DeleteWordForward       key.Binding
+	DeleteAfterCursor       key.Binding
+	DeleteBeforeCursor      key.Binding
+	DeleteCharacterBackward key.Binding
+	DeleteCharacterForward  key.Binding
+	LineStart               key.Binding
+	LineEnd                 key.Binding
+	Paste                   key.Binding
+	AcceptSuggestion        key.Binding
+	NextSuggestion          key.Binding
+	PrevSuggestion          key.Binding
+}
+    KeyMap is the key bindings for different actions within the textinput.
+
+func DefaultKeyMap() KeyMap
+    DefaultKeyMap is the default set of key bindings for navigating and acting
+    upon the textinput.
+
+type Model struct {
+	Err error
+
+	// General settings.
+	Prompt        string
+	Placeholder   string
+	EchoMode      EchoMode
+	EchoCharacter rune
+
+	// CharLimit is the maximum amount of characters this input element will
+	// accept. If 0 or less, there's no limit.
+	CharLimit int
+
+	// KeyMap encodes the keybindings recognized by the widget.
+	KeyMap KeyMap
+
+	// Validate is a function that checks whether or not the text within the
+	// input is valid. If it is not valid, the `Err` field will be set to the
+	// error returned by the function. If the function is not defined, all
+	// input is considered valid.
+	Validate ValidateFunc
+
+	// Should the input suggest to complete
+	ShowSuggestions bool
+
+	// Has unexported fields.
+}
+    Model is the Bubble Tea model for this text input element.
+
+func New() Model
+    New creates a new model with default settings.
+
+func (m *Model) AvailableSuggestions() []string
+    AvailableSuggestions returns the list of available suggestions.
+
+func (m *Model) Blur()
+    Blur removes the focus state on the model. When the model is blurred it can
+    not receive keyboard input and the cursor will be hidden.
+
+func (m *Model) CurrentSuggestion() string
+    CurrentSuggestion returns the currently selected suggestion.
+
+func (m *Model) CurrentSuggestionIndex() int
+    CurrentSuggestionIndex returns the currently selected suggestion index.
+
+func (m Model) Cursor() *tea.Cursor
+    Cursor returns a tea.Cursor for rendering a real cursor in a Bubble Tea
+    program. This requires that Model.VirtualCursor is set to false.
+
+    Note that you will almost certainly also need to adjust the offset cursor
+    position per the textarea's per the textarea's position in the terminal.
+
+    Example:
+
+        // In your top-level View function:
+        f := tea.NewFrame(m.textarea.View())
+        f.Cursor = m.textarea.Cursor()
+        f.Cursor.Position.X += offsetX
+        f.Cursor.Position.Y += offsetY
+
+func (m *Model) CursorEnd()
+    CursorEnd moves the cursor to the end of the input field.
+
+func (m *Model) CursorStart()
+    CursorStart moves the cursor to the start of the input field.
+
+func (m *Model) Focus() tea.Cmd
+    Focus sets the focus state on the model. When the model is in focus it can
+    receive keyboard input and the cursor will be shown.
+
+func (m Model) Focused() bool
+    Focused returns the focus state on the model.
+
+func (m *Model) MatchedSuggestions() []string
+    MatchedSuggestions returns the list of matched suggestions.
+
+func (m Model) Position() int
+    Position returns the cursor position.
+
+func (m *Model) Reset()
+    Reset sets the input to its default state with no input.
+
+func (m *Model) SetCursor(pos int)
+    SetCursor moves the cursor to the given position. If the position is out of
+    bounds the cursor will be moved to the start or end accordingly.
+
+func (m *Model) SetStyles(s Styles)
+    SetStyles sets the styles for the text input.
+
+func (m *Model) SetSuggestions(suggestions []string)
+    SetSuggestions sets the suggestions for the input.
+
+func (m *Model) SetValue(s string)
+    SetValue sets the value of the text input.
+
+func (m *Model) SetVirtualCursor(v bool)
+    SetVirtualCursor sets whether the model should use a virtual cursor.
+    If disabled, use Model.Cursor to return a real cursor for rendering.
+
+func (m *Model) SetWidth(w int)
+    SetWidth sets the width of the text input.
+
+func (m Model) Styles() Styles
+    Styles returns the current set of styles.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update is the Bubble Tea update loop.
+
+func (m Model) Value() string
+    Value returns the value of the text input.
+
+func (m Model) View() string
+    View renders the textinput in its current state.
+
+func (m Model) VirtualCursor() bool
+    VirtualCursor returns whether the model is using a virtual cursor.
+
+func (m Model) Width() int
+    Width returns the width of the text input.
+
+type StyleState struct {
+	Text        lipgloss.Style
+	Placeholder lipgloss.Style
+	Suggestion  lipgloss.Style
+	Prompt      lipgloss.Style
+}
+    StyleState that will be applied to the text area.
+
+    StyleState can be applied to focused and unfocused states to change the
+    styles depending on the focus state.
+
+    For an introduction to styling with Lip Gloss see:
+    https://github.com/charmbracelet/lipgloss
+
+type Styles struct {
+	Focused StyleState
+	Blurred StyleState
+	Cursor  CursorStyle
+}
+    Styles are the styles for the textarea, separated into focused and blurred
+    states. The appropriate styles will be chosen based on the focus state of
+    the textarea.
+
+func DefaultDarkStyles() Styles
+    DefaultDarkStyles returns the default styles for a dark background.
+
+func DefaultLightStyles() Styles
+    DefaultLightStyles returns the default styles for a light background.
+
+func DefaultStyles(isDark bool) Styles
+    DefaultStyles returns the default styles for focused and blurred states for
+    the textarea.
+
+type ValidateFunc func(string) error
+    ValidateFunc is a function that returns an error if the input is invalid.
+

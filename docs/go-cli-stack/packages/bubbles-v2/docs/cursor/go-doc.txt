@@ -1,0 +1,83 @@
+package cursor // import "charm.land/bubbles/v2/cursor"
+
+Package cursor provides a virtual cursor to support the textinput and textarea
+elements.
+
+FUNCTIONS
+
+func Blink() tea.Msg
+    Blink is a command used to initialize cursor blinking.
+
+
+TYPES
+
+type BlinkMsg struct {
+	// Has unexported fields.
+}
+    BlinkMsg signals that the cursor should blink. It contains metadata that
+    allows us to tell if the blink message is the one we're expecting.
+
+type Mode int
+    Mode describes the behavior of the cursor.
+
+const (
+	CursorBlink Mode = iota
+	CursorStatic
+	CursorHide
+)
+    Available cursor modes.
+
+func (c Mode) String() string
+    String returns the cursor mode in a human-readable format. This method is
+    provisional and for informational purposes only.
+
+type Model struct {
+	// Style styles the cursor block.
+	Style lipgloss.Style
+
+	// TextStyle is the style used for the cursor when it is blinking
+	// (hidden), i.e. displaying normal text.
+	TextStyle lipgloss.Style
+
+	// BlinkSpeed is the speed at which the cursor blinks. This has no effect
+	// unless [CursorMode] is not set to [CursorBlink].
+	BlinkSpeed time.Duration
+
+	// IsBlinked is the state of the cursor blink. When true, the cursor is
+	// hidden.
+	IsBlinked bool
+
+	// Has unexported fields.
+}
+    Model is the Bubble Tea model for this cursor element.
+
+func New() Model
+    New creates a new model with default settings.
+
+func (m *Model) Blink() tea.Cmd
+    Blink is a command used to manage cursor blinking.
+
+func (m *Model) Blur()
+    Blur blurs the cursor.
+
+func (m *Model) Focus() tea.Cmd
+    Focus focuses the cursor to allow it to blink if desired.
+
+func (m Model) Mode() Mode
+    Mode returns the model's cursor mode. For available cursor modes, see type
+    Mode.
+
+func (m *Model) SetChar(char string)
+    SetChar sets the character under the cursor.
+
+func (m *Model) SetMode(mode Mode) tea.Cmd
+    SetMode sets the model's cursor mode. This method returns a command.
+
+    For available cursor modes, see type CursorMode.
+
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd)
+    Update updates the cursor.
+
+func (m Model) View() string
+    View displays the cursor.
+
