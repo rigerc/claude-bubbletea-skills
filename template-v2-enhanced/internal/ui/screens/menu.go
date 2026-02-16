@@ -95,7 +95,10 @@ type MenuScreen struct {
 func NewMenuScreen(title string, items []list.Item, isDark bool) *MenuScreen {
 	theme := styles.New(isDark)
 	dKeys := newDelegateKeyMap()
-	d := newMenuDelegate(dKeys, isDark)
+	// Use true as the initial isDark to match the library's own default (which
+	// hardcodes isDark=true). The correct value is applied via SetTheme /
+	// BackgroundColorMsg before the first meaningful render.
+	d := newMenuDelegate(dKeys, true)
 
 	l := list.New(items, d, 0, 0) // 0,0: WindowSizeMsg drives size
 	l.Title = title
@@ -155,6 +158,7 @@ func (s *MenuScreen) SetTheme(isDark bool) {
 	s.theme = styles.New(isDark)
 	s.list.Styles = list.DefaultStyles(s.isDark)
 	s.list.Styles.Title = s.theme.Title
+	s.list.SetDelegate(newMenuDelegate(s.delegateKeys, s.isDark))
 }
 
 // updateListSize recalculates the list dimensions based on window size
