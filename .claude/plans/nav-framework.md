@@ -76,6 +76,11 @@ type ScreenKeyMap interface {
     HelpKeys() []key.Binding
 }
 
+// HelpExpandable is optional. Router notifies screen when help toggles.
+type HelpExpandable interface {
+    SetHelpExpanded(expanded bool)
+}
+
 // Navigation message types:
 type PushMsg    struct{ Screen Screen }
 type PopMsg     struct{}
@@ -196,8 +201,9 @@ type MenuScreen struct {
 
 ```go
 func NewMenuScreen(title string, items []list.Item, isDark bool) *MenuScreen {
-    dKeys := newDelegateKeyMap()
-    d     := newMenuDelegate(dKeys, isDark)
+    theme := styles.New(isDark)
+    dKeys  := newDelegateKeyMap()
+    d      := newMenuDelegate(dKeys, isDark)
 
     l := list.New(items, d, 0, 0)   // 0,0: WindowSizeMsg drives size
     l.Title = title
@@ -224,10 +230,7 @@ func (s *MenuScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
         s.theme = styles.New(s.isDark)
         s.list.Styles = list.DefaultStyles(s.isDark)
         s.list.Styles.Title = s.theme.Title
-        d := list.NewDefaultDelegate()
-        d.Styles = list.NewDefaultItemStyles(s.isDark)
-        d.UpdateFunc = ...   // same delegate logic, new styles
-        s.list.SetDelegate(d)
+        s.list.SetDelegate(newMenuDelegate(s.delegateKeys, s.isDark))
         return s, nil
 
     case tea.KeyPressMsg:
@@ -250,6 +253,24 @@ func (s *MenuScreen) updateListSize() {
     frameH, frameV := s.theme.App.GetFrameSize()
     helpH := styles.HelpBarHeight(s.helpExpanded)
     s.list.SetSize(s.width-frameH, s.height-frameV-helpH)
+}
+```
+
+Called on every `WindowSizeMsg` and whenever `helpExpanded` toggles.
+
+### Implements nav.ScreenKeyMap
+
+`MenuScreen` implements `nav.ScreenKeyMap` to expose the delegate's `choose` binding in the help bar (since `l.SetShowHelp(false)` hides the list's built-in help):
+
+```go
+// Implements nav.ScreenKeyMap:
+func (s *MenuScreen) HelpKeys() []key.Binding {
+    return []key.Binding{s.delegateKeys.choose}
+}
+
+// Implements nav.HelpExpandable:
+func (s *MenuScreen) SetHelpExpanded(expanded bool) {
+    s.helpExpanded = expanded
 }
 ```
 
@@ -292,6 +313,7 @@ type DetailScreen struct {
     width, height  int
     vp             viewport.Model
     ready          bool  // false until first WindowSizeMsg
+    helpExpanded   bool  // tracks help expansion state
 }
 
 func NewDetailScreen(title, content string, isDark bool) *DetailScreen
@@ -302,6 +324,12 @@ func (s *DetailScreen) View() string
 
 // Implements nav.Themeable:
 func (s *DetailScreen) SetTheme(isDark bool)
+
+// Implements nav.ScreenKeyMap (optional - detail screens have no extra keys):
+func (s *DetailScreen) HelpKeys() []key.Binding { return nil }
+
+// Implements nav.HelpExpandable:
+func (s *DetailScreen) SetHelpExpanded(expanded bool) { s.helpExpanded = expanded }
 
 func (s *DetailScreen) SetContent(content string)  // update viewport content
 func (s *DetailScreen) headerView() string         // private: renders title bar
@@ -314,7 +342,7 @@ case tea.WindowSizeMsg:
     s.width, s.height = msg.Width, msg.Height
     headerH := lipgloss.Height(s.headerView())
     frameH, frameV := s.theme.App.GetFrameSize()
-    helpH  := styles.HelpBarHeight(false)
+    helpH  := styles.HelpBarHeight(s.helpExpanded)
     s.vp.SetWidth(s.width - frameH)
     s.vp.SetHeight(s.height - frameV - headerH - helpH)
     if !s.ready {
@@ -420,13 +448,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         if key.Matches(msg, m.keys.Help) {
             m.helpExpanded = !m.helpExpanded
             m.help.ShowAll = m.helpExpanded
+            // Notify active screen if it implements HelpExpandable
+            if len(m.screens) > 0 {
+                if h, ok := m.screens[len(m.screens)-1].(nav.HelpExpandable); ok {
+                    h.SetHelpExpanded(m.helpExpanded)
+                }
+            }
             m.notifyActiveScreenResize()
             return m, nil
         }
 
     case tea.WindowSizeMsg:
         m.width, m.height = msg.Width, msg.Height
-        m.help.Width = msg.Width   // Width is a field, not a method
+        m.help.SetWidth(msg.Width)   // SetWidth is a method in v2
         // fall through to delegate to active screen
 
     case tea.BackgroundColorMsg:
@@ -460,6 +494,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             s := msg.Screen
             if cmd := s.Init(); cmd != nil { cmds = append(cmds, cmd) }
             if t, ok := s.(nav.Themeable); ok { t.SetTheme(m.isDark) }
+            s, cmd := s.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+            cmds = append(cmds, cmd)
             m.screens[len(m.screens)-1] = s
         }
         return m, tea.Batch(cmds...)
@@ -562,13 +598,51 @@ func (c combinedKeyMap) FullHelp() [][]key.Binding {
 | `l.SetShowHelp(false)` | MUST be set — we render help in Model, not list |
 | `list.New(items, d, 0, 0)` | Always 0,0 — `WindowSizeMsg` drives size via `updateListSize()` |
 | `list.SetItems` returns `tea.Cmd` | Never ignore — contains status message animation |
-| `help.Width` is a field, not a method | `m.help.Width = msg.Width`, not `m.help.SetWidth()` |
+| `help.Width` is getter/setter methods | `m.help.SetWidth(msg.Width)`, not `m.help.Width = ...` |
 | `list.DefaultStyles(isDark bool)` | Must pass correct `isDark`; `false` is OK as initial |
 | `list.NewDefaultItemStyles(isDark)` | Same — update in `SetTheme()` by recreating delegate |
 | ESC in menu | Check `list.FilterState() == list.Unfiltered` before calling `nav.Pop()` |
 | Theme on new screens | Inject via `nav.Themeable.SetTheme()` + send `WindowSizeMsg` on push |
 | Viewport in v2 | `viewport.New()` with no positional args (changed from v1) |
 | `ui.New()` signature | Value type: `New(cfg config.Config)`, not `New(cfg *config.Config)` |
+| Screen View() must wrap | `return s.theme.App.Render(content)` — matches updateListSize math |
+| MenuScreen.ScreenKeyMap | Implement to show delegate `choose` binding in help bar |
+| HelpExpandable interface | Screens store `helpExpanded` bool; Model updates on `?` toggle |
+
+---
+
+### Screen View() Requirement (IMPORTANT)
+
+Each screen's `View()` method **must** wrap its content with `theme.App.Render()` to apply the margin that `updateListSize()` accounts for. Without this, the list/viewport will be sized too large and overlap the help bar.
+
+```go
+// MenuScreen.View():
+func (s *MenuScreen) View() string {
+    return s.theme.App.Render(s.list.View())
+}
+
+// DetailScreen.View():
+func (s *DetailScreen) View() string {
+    return s.theme.App.Render(
+        lipgloss.JoinVertical(lipgloss.Left, s.headerView(), s.vp.View()),
+    )
+}
+```
+
+---
+
+### HelpExpandable Interface
+
+Since screens need to know whether help is expanded to calculate their height correctly, add this interface to `nav/nav.go`:
+
+```go
+// HelpExpandable is optional. Router notifies screen when help toggles.
+type HelpExpandable interface {
+    SetHelpExpanded(expanded bool)
+}
+```
+
+Screens implement it by storing `helpExpanded bool` and using it in `updateListSize()`. The router's `?` handler calls `SetHelpExpanded(expanded)` before `notifyActiveScreenResize()`.
 
 ---
 

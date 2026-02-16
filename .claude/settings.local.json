@@ -7,7 +7,10 @@
       "Bash(go get:*)",
       "Bash(go test:*)",
       "Skill(lipgloss-v2)",
-      "Skill(bubbles-v2)"
+      "Skill(bubbles-v2)",
+      "Bash(go list:*)",
+      "Bash(go mod download:*)",
+      "Bash(timeout 2 go run:*)"
     ]
   }
 }
