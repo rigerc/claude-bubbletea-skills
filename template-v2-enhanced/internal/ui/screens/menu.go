@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"template-v2-enhanced/internal/ui/nav"
-	"template-v2-enhanced/internal/ui/styles"
 )
 
 // MenuItem represents an item in the navigation menu.
@@ -82,36 +81,32 @@ func newMenuDelegate(dKeys delegateKeyMap, isDark bool) list.DefaultDelegate {
 // MenuScreen displays a navigable list of menu items.
 // It implements nav.Screen and nav.Themeable.
 type MenuScreen struct {
+	ScreenBase
 	list         list.Model
 	delegateKeys delegateKeyMap
-	theme        styles.Theme
-	isDark       bool
-	width, height int
 }
 
 // NewMenuScreen creates a new MenuScreen with the given title and items.
 // The isDark parameter should be false initially; the correct value will be
 // set via SetTheme when the screen is pushed onto the stack.
 func NewMenuScreen(title string, items []list.Item, isDark bool) *MenuScreen {
-	theme := styles.New(isDark)
-	dKeys := newDelegateKeyMap()
+	s := &MenuScreen{
+		ScreenBase:   NewBase(isDark),
+		delegateKeys: newDelegateKeyMap(),
+	}
 	// Use true as the initial isDark to match the library's own default (which
 	// hardcodes isDark=true). The correct value is applied via SetTheme /
 	// BackgroundColorMsg before the first meaningful render.
-	d := newMenuDelegate(dKeys, true)
+	d := newMenuDelegate(s.delegateKeys, true)
 
 	l := list.New(items, d, 0, 0) // 0,0: WindowSizeMsg drives size
 	l.Title = title
 	l.Styles = list.DefaultStyles(isDark)
-	l.Styles.Title = theme.Title // branded title override
-	l.DisableQuitKeybindings()   // REQUIRED: prevents list eating ctrl+c/q
+	l.Styles.Title = s.Theme.Title // branded title override
+	l.DisableQuitKeybindings()     // REQUIRED: prevents list eating ctrl+c/q
+	s.list = l
 
-	return &MenuScreen{
-		list:         l,
-		delegateKeys: dKeys,
-		theme:        theme,
-		isDark:       isDark,
-	}
+	return s
 }
 
 // Init returns nil (no initial commands needed).
@@ -123,16 +118,8 @@ func (s *MenuScreen) Init() tea.Cmd {
 func (s *MenuScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		s.width, s.height = msg.Width, msg.Height
+		s.Width, s.Height = msg.Width, msg.Height
 		s.updateListSize()
-
-	case tea.BackgroundColorMsg:
-		s.isDark = msg.IsDark()
-		s.theme = styles.New(s.isDark)
-		s.list.Styles = list.DefaultStyles(s.isDark)
-		s.list.Styles.Title = s.theme.Title
-		s.list.SetDelegate(newMenuDelegate(s.delegateKeys, s.isDark))
-		return s, nil
 
 	case tea.KeyPressMsg:
 		// ESC pops stack ONLY when not filtering
@@ -148,29 +135,28 @@ func (s *MenuScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 
 // View renders the menu list wrapped with the theme's margin style.
 func (s *MenuScreen) View() string {
-	return s.theme.App.Render(s.list.View())
+	return s.Theme.App.Render(s.list.View())
 }
 
 // SetTheme updates the screen's theme based on the terminal background.
 // Implements nav.Themeable.
 func (s *MenuScreen) SetTheme(isDark bool) {
-	s.isDark = isDark
-	s.theme = styles.New(isDark)
-	s.list.Styles = list.DefaultStyles(s.isDark)
-	s.list.Styles.Title = s.theme.Title
-	s.list.SetDelegate(newMenuDelegate(s.delegateKeys, s.isDark))
+	s.ApplyTheme(isDark)
+	s.list.Styles = list.DefaultStyles(s.IsDark)
+	s.list.Styles.Title = s.Theme.Title
+	s.list.SetDelegate(newMenuDelegate(s.delegateKeys, s.IsDark))
 }
 
 // updateListSize recalculates the list dimensions based on window size
 // and theme frame. Height accounts for title, items (with descriptions), and help.
 func (s *MenuScreen) updateListSize() {
-	if s.width == 0 || s.height == 0 {
+	if !s.IsSized() {
 		return
 	}
-	frameH, frameV := s.theme.App.GetFrameSize()
+	frameH, frameV := s.Theme.App.GetFrameSize()
 
 	// Calculate available height after frame
-	availH := s.height - frameV
+	availH := s.Height - frameV
 
 	// Get actual item count (not filtered)
 	itemCount := len(s.list.Items())
@@ -193,5 +179,5 @@ func (s *MenuScreen) updateListSize() {
 		targetH = 10
 	}
 
-	s.list.SetSize(s.width-frameH, targetH)
+	s.list.SetSize(s.Width-frameH, targetH)
 }

@@ -2,17 +2,14 @@ package screens
 
 import (
 	"os"
-	"strings"
 
-	lipglossv2 "charm.land/lipgloss/v2"
+	lipgloss "charm.land/lipgloss/v2"
 	"charm.land/bubbles/v2/filepicker"
-	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	appkeys "template-v2-enhanced/internal/ui/keys"
 	"template-v2-enhanced/internal/ui/nav"
-	"template-v2-enhanced/internal/ui/styles"
 )
 
 // filePickerHelpKeys combines the filepicker and global key maps for help display.
@@ -52,13 +49,9 @@ func readFileContent(path string) tea.Cmd {
 // FilePickerScreen lets the user browse the filesystem and open text files
 // in a DetailScreen. It implements nav.Screen and nav.Themeable.
 type FilePickerScreen struct {
-	fp            filepicker.Model
-	keys          appkeys.GlobalKeyMap
-	help          help.Model
-	theme         styles.Theme
-	isDark        bool
-	width, height int
-	statusMsg     string
+	ScreenBase
+	fp        filepicker.Model
+	statusMsg string
 }
 
 // NewFilePickerScreen creates a new FilePickerScreen rooted at startDir.
@@ -72,15 +65,9 @@ func NewFilePickerScreen(startDir string, isDark bool) *FilePickerScreen {
 	fp.KeyMap.Back.SetKeys("h", "backspace", "left")
 	fp.KeyMap.Back.SetHelp("h", "back")
 
-	h := help.New()
-	h.Styles = help.DefaultStyles(isDark)
-
 	return &FilePickerScreen{
-		fp:     fp,
-		keys:   appkeys.New(),
-		help:   h,
-		theme:  styles.New(isDark),
-		isDark: isDark,
+		ScreenBase: NewBase(isDark),
+		fp:         fp,
 	}
 }
 
@@ -93,15 +80,15 @@ func (s *FilePickerScreen) Init() tea.Cmd {
 func (s *FilePickerScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		s.width, s.height = msg.Width, msg.Height
+		s.Width, s.Height = msg.Width, msg.Height
 		s.updateSize()
 
 	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, s.keys.Help):
-			s.help.ShowAll = !s.help.ShowAll
+		case key.Matches(msg, s.Keys.Help):
+			s.Help.ShowAll = !s.Help.ShowAll
 			return s, nil
-		case key.Matches(msg, s.keys.Back):
+		case key.Matches(msg, s.Keys.Back):
 			return s, nav.Pop()
 		}
 
@@ -110,7 +97,7 @@ func (s *FilePickerScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 			s.statusMsg = "Error: " + msg.err.Error()
 			return s, nil
 		}
-		return s, nav.Push(NewDetailScreen(msg.path, msg.content, s.isDark))
+		return s, nav.Push(NewDetailScreen(msg.path, msg.content, s.IsDark))
 	}
 
 	var cmd tea.Cmd
@@ -130,14 +117,13 @@ func (s *FilePickerScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 
 // View renders the filepicker screen.
 func (s *FilePickerScreen) View() string {
-	helpKeys := filePickerHelpKeys{fp: s.fp.KeyMap, app: s.keys}
-	helpView := lipglossv2.NewStyle().MarginTop(1).Render(s.help.View(helpKeys))
-	return s.theme.App.Render(
-		lipglossv2.JoinVertical(lipglossv2.Left,
-			s.headerView(),
+	helpKeys := filePickerHelpKeys{fp: s.fp.KeyMap, app: s.Keys}
+	return s.Theme.App.Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			s.HeaderView("Browse Files"),
 			s.statusView(),
 			s.fp.View(),
-			helpView,
+			s.RenderHelp(helpKeys),
 		),
 	)
 }
@@ -145,47 +131,31 @@ func (s *FilePickerScreen) View() string {
 // SetTheme updates styles for the current terminal background.
 // Implements nav.Themeable.
 func (s *FilePickerScreen) SetTheme(isDark bool) {
-	s.isDark = isDark
-	s.theme = styles.New(isDark)
-	s.help.Styles = help.DefaultStyles(isDark)
-}
-
-// headerView renders the title badge + horizontal rule, matching the detail screen style.
-func (s *FilePickerScreen) headerView() string {
-	title := s.theme.Title.Padding(1, 2).Render("Browse Files")
-	lineW := max(0, s.contentWidth()-lipglossv2.Width(title))
-	line := s.theme.Subtle.Render(strings.Repeat("─", lineW))
-	return lipglossv2.JoinHorizontal(lipglossv2.Center, title, line)
+	s.ApplyTheme(isDark)
 }
 
 // statusView renders a one-line bar showing the current directory and any status message.
 func (s *FilePickerScreen) statusView() string {
-	dir := s.theme.Subtle.Render("  " + s.fp.CurrentDirectory)
+	dir := s.Theme.Subtle.Render("  " + s.fp.CurrentDirectory)
 	if s.statusMsg != "" {
-		msg := s.theme.StatusMessage.Render("  " + s.statusMsg)
-		return lipglossv2.JoinVertical(lipglossv2.Left, dir, msg)
+		msg := s.Theme.StatusMessage.Render("  " + s.statusMsg)
+		return lipgloss.JoinVertical(lipgloss.Left, dir, msg)
 	}
 	return dir
-}
-
-// contentWidth returns the usable width inside the App frame.
-func (s *FilePickerScreen) contentWidth() int {
-	frameH, _ := s.theme.App.GetFrameSize()
-	return s.width - frameH
 }
 
 // updateSize recalculates the filepicker height from the remaining space after
 // the header and status bar.
 func (s *FilePickerScreen) updateSize() {
-	if s.width == 0 || s.height == 0 {
+	if !s.IsSized() {
 		return
 	}
-	_, frameV := s.theme.App.GetFrameSize()
-	headerH := lipglossv2.Height(s.headerView())
-	statusH := lipglossv2.Height(s.statusView())
+	_, frameV := s.Theme.App.GetFrameSize()
+	headerH := lipgloss.Height(s.HeaderView("Browse Files"))
+	statusH := lipgloss.Height(s.statusView())
 
-	fpH := s.height - frameV - headerH - statusH
-	if cap := s.height / 3; fpH > cap {
+	fpH := s.Height - frameV - headerH - statusH
+	if cap := s.Height / 3; fpH > cap {
 		fpH = cap
 	}
 	if fpH < 4 {

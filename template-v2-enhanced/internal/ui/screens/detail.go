@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	lipglossv2 "charm.land/lipgloss/v2"
-	"charm.land/bubbles/v2/help"
+	lipgloss "charm.land/lipgloss/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
 	appkeys "template-v2-enhanced/internal/ui/keys"
 	"template-v2-enhanced/internal/ui/nav"
-	"template-v2-enhanced/internal/ui/styles"
 )
 
 // detailHelpKeys implements help.KeyMap by combining the viewport scroll
@@ -37,12 +35,8 @@ func (k detailHelpKeys) FullHelp() [][]key.Binding {
 // DetailScreen displays scrollable text content with a pager-style header and footer.
 // It implements nav.Screen and nav.Themeable.
 type DetailScreen struct {
+	ScreenBase
 	title, content string
-	keys           appkeys.GlobalKeyMap
-	help           help.Model
-	theme          styles.Theme
-	isDark         bool
-	width, height  int
 	vp             viewport.Model
 	ready          bool // false until first WindowSizeMsg
 }
@@ -53,17 +47,11 @@ func NewDetailScreen(title, content string, isDark bool) *DetailScreen {
 	vp.MouseWheelEnabled = true
 	vp.SoftWrap = true
 
-	h := help.New()
-	h.Styles = help.DefaultStyles(isDark)
-
 	return &DetailScreen{
-		title:   title,
-		content: content,
-		keys:    appkeys.New(),
-		help:    h,
-		theme:   styles.New(isDark),
-		isDark:  isDark,
-		vp:      vp,
+		ScreenBase: NewBase(isDark),
+		title:      title,
+		content:    content,
+		vp:         vp,
 	}
 }
 
@@ -76,7 +64,7 @@ func (s *DetailScreen) Init() tea.Cmd {
 func (s *DetailScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		s.width, s.height = msg.Width, msg.Height
+		s.Width, s.Height = msg.Width, msg.Height
 		s.updateViewportSize()
 		if !s.ready {
 			s.applyGutter()
@@ -86,11 +74,11 @@ func (s *DetailScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, s.keys.Help):
-			s.help.ShowAll = !s.help.ShowAll
+		case key.Matches(msg, s.Keys.Help):
+			s.Help.ShowAll = !s.Help.ShowAll
 			s.updateViewportSize()
 			return s, nil
-		case key.Matches(msg, s.keys.Back):
+		case key.Matches(msg, s.Keys.Back):
 			return s, nav.Pop()
 		}
 	}
@@ -105,14 +93,13 @@ func (s *DetailScreen) View() string {
 	if !s.ready {
 		return "Loading..."
 	}
-	helpKeys := detailHelpKeys{vp: s.vp.KeyMap, app: s.keys}
-	helpView := lipglossv2.NewStyle().MarginTop(1).Render(s.help.View(helpKeys))
-	return s.theme.App.Render(
-		lipglossv2.JoinVertical(lipglossv2.Left,
-			s.headerView(),
+	helpKeys := detailHelpKeys{vp: s.vp.KeyMap, app: s.Keys}
+	return s.Theme.App.Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			s.HeaderView(s.title),
 			s.vp.View(),
 			s.footerView(),
-			helpView,
+			s.RenderHelp(helpKeys),
 		),
 	)
 }
@@ -120,31 +107,8 @@ func (s *DetailScreen) View() string {
 // SetTheme updates the screen's theme based on the terminal background.
 // Implements nav.Themeable.
 func (s *DetailScreen) SetTheme(isDark bool) {
-	s.isDark = isDark
-	s.theme = styles.New(isDark)
-	s.help.Styles = help.DefaultStyles(isDark)
+	s.ApplyTheme(isDark)
 	s.applyGutter()
-}
-
-// SetContent updates the viewport content.
-func (s *DetailScreen) SetContent(content string) {
-	s.content = content
-	if s.ready {
-		s.vp.SetContent(content)
-	}
-}
-
-// headerView renders the theme title badge with a horizontal rule extending to the right.
-// Vertical padding is increased relative to the shared Title style to give the
-// header more visual weight (terminals have no font-size; padding is the lever).
-//
-//	 Title  ────────────────────────────────
-//	(green, tall)
-func (s *DetailScreen) headerView() string {
-	title := s.theme.Title.Padding(1, 2).Render(s.title)
-	lineW := max(0, s.contentWidth()-lipglossv2.Width(title))
-	line := s.theme.Subtle.Render(strings.Repeat("─", lineW))
-	return lipglossv2.JoinHorizontal(lipglossv2.Center, title, line)
 }
 
 // footerView renders a horizontal rule with a scroll-percentage badge on the right.
@@ -152,23 +116,23 @@ func (s *DetailScreen) headerView() string {
 //	──────────────────────────────────┤  42%  │
 //	                                  ╰───────╯
 func (s *DetailScreen) footerView() string {
-	b := lipglossv2.RoundedBorder()
+	b := lipgloss.RoundedBorder()
 	b.Left = "┤"
-	info := lipglossv2.NewStyle().
+	info := lipgloss.NewStyle().
 		BorderStyle(b).
-		BorderForeground(lipglossv2.Color("#25A065")).
+		BorderForeground(lipgloss.Color("#25A065")).
 		Padding(0, 1).
 		Render(fmt.Sprintf("%3.f%%", s.vp.ScrollPercent()*100))
 
-	lineW := max(0, s.contentWidth()-lipglossv2.Width(info))
-	line := s.theme.Subtle.Render(strings.Repeat("─", lineW))
-	return lipglossv2.JoinHorizontal(lipglossv2.Center, line, info)
+	lineW := max(0, s.ContentWidth()-lipgloss.Width(info))
+	line := s.Theme.Subtle.Render(strings.Repeat("─", lineW))
+	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
 }
 
 // applyGutter sets the viewport's left gutter to show line numbers.
 // Called on first render and whenever the theme changes.
 func (s *DetailScreen) applyGutter() {
-	gutterStyle := s.theme.Subtle
+	gutterStyle := s.Theme.Subtle
 	s.vp.LeftGutterFunc = func(info viewport.GutterContext) string {
 		switch {
 		case info.Soft:
@@ -181,28 +145,22 @@ func (s *DetailScreen) applyGutter() {
 	}
 }
 
-// contentWidth returns the usable width inside the App frame.
-func (s *DetailScreen) contentWidth() int {
-	frameH, _ := s.theme.App.GetFrameSize()
-	return s.width - frameH
-}
-
 // updateViewportSize recalculates viewport dimensions from the window size,
 // theme frame, header height, and footer height.
 func (s *DetailScreen) updateViewportSize() {
-	if s.width == 0 || s.height == 0 {
+	if !s.IsSized() {
 		return
 	}
-	_, frameV := s.theme.App.GetFrameSize()
-	s.help.SetWidth(s.contentWidth())
-	headerH := lipglossv2.Height(s.headerView())
-	footerH := lipglossv2.Height(s.footerView())
+	_, frameV := s.Theme.App.GetFrameSize()
+	s.Help.SetWidth(s.ContentWidth())
+	headerH := lipgloss.Height(s.HeaderView(s.title))
+	footerH := lipgloss.Height(s.footerView())
 
 	// Help sits below the footer (outside the pager block) so is not subtracted here.
-	vpH := s.height - frameV - headerH - footerH
-	if cap := s.height / 3; vpH > cap {
+	vpH := s.Height - frameV - headerH - footerH
+	if cap := s.Height / 3; vpH > cap {
 		vpH = cap
 	}
-	s.vp.SetWidth(s.contentWidth())
+	s.vp.SetWidth(s.ContentWidth())
 	s.vp.SetHeight(vpH)
 }

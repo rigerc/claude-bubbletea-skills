@@ -13,8 +13,6 @@ type Theme struct {
 	App           lipglossv2.Style // outer container: Margin(1, 2)
 	Title         lipglossv2.Style // list title bar (overrides list default)
 	StatusMessage lipglossv2.Style // list status bar message
-	HelpBar       lipglossv2.Style // help bar at bottom
-	Detail        lipglossv2.Style // body text in detail screens
 	Subtle        lipglossv2.Style // de-emphasized text
 }
 
@@ -35,27 +33,12 @@ func New(isDark bool) Theme {
 				lipglossv2.Color("#04B575"),
 				lipglossv2.Color("#10CC85"),
 			)),
-		HelpBar: lipglossv2.NewStyle().
-			Foreground(ld(
-				lipglossv2.Color("#626262"),
-				lipglossv2.Color("#9B9B9B"),
-			)),
-		Detail:  lipglossv2.NewStyle().Margin(0, 2),
 		Subtle: lipglossv2.NewStyle().
 			Foreground(ld(
 				lipglossv2.Color("#9B9B9B"),
 				lipglossv2.Color("#626262"),
 			)),
 	}
-}
-
-// HelpBarHeight returns the number of lines consumed by the help bar.
-// It returns 1 for short help and 3 for full (expanded) help.
-func HelpBarHeight(showAll bool) int {
-	if showAll {
-		return 3
-	}
-	return 1
 }
 
 // Color is a convenience function that creates an adaptive color.
