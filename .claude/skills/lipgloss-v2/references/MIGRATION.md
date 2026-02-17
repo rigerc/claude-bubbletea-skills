@@ -22,7 +22,7 @@ github.com/charmbracelet/lipgloss/tree  → charm.land/lipgloss/v2/tree
 github.com/charmbracelet/lipgloss/list  → charm.land/lipgloss/v2/list
 ```
 
-Install: `go get charm.land/lipgloss/v2`
+Install: `go get charm.land/lipgloss/v2@v2.0.0-beta.3.0.20251205162909-7869489d8971`
 
 ### 2. Use Lip Gloss print functions
 
@@ -84,6 +84,7 @@ color := ld(lipgloss.Color("#0000ff"), lipgloss.Color("#000099"))
 color := lipgloss.CompleteColor{TrueColor: "#ff00ff", ANSI256: "200", ANSI: "5"}
 
 // v2 — using compat
+import "charm.land/lipgloss/v2/compat"
 color := compat.CompleteColor{
     TrueColor: lipgloss.Color("#ff00ff"),
     ANSI256:   lipgloss.Color("200"),
@@ -91,9 +92,18 @@ color := compat.CompleteColor{
 }
 
 // v2 — recommended
+import "github.com/charmbracelet/colorprofile"
+
 profile := colorprofile.Detect(os.Stdout, os.Environ())
 complete := lipgloss.Complete(profile)
 color := complete(lipgloss.Color("5"), lipgloss.Color("200"), lipgloss.Color("#ff00ff"))
+```
+
+### `NoColor` type added
+
+```go
+// v2 — specify absence of color
+style := lipgloss.NewStyle().Background(lipgloss.NoColor{})
 ```
 
 ---
@@ -204,12 +214,75 @@ s.UnderlineColor(lipgloss.Color("#FF0000"))
 
 ---
 
+## Strikethrough Spaces
+
+```go
+// v2 — new option
+s.StrikethroughSpaces(true)  // apply strikethrough to spaces between words
+```
+
+---
+
 ## Tree Subpackage (new in v2)
 
 New methods on `*tree.Tree`:
 - `IndenterStyle(lipgloss.Style)` — static indentation style
 - `IndenterStyleFunc(func(Children, int) lipgloss.Style)` — conditional
 - `Width(int)` — set tree width for padding
+- `Offset(start, end int)` — set children offsets
+- `Hide(bool)` — hide the tree node
+
+New root constructor:
+```go
+// v2 — shorthand
+t := tree.Root("project/").Child("file.go")
+// instead of
+t := tree.New().Root("project/").Child("file.go")
+```
+
+---
+
+## Compositing (new in v2)
+
+Layer-based composition is entirely new in v2:
+
+```go
+// Create layers at arbitrary positions
+base := lipgloss.NewLayer(content)
+modal := lipgloss.NewLayer(floatingBox).X(10).Y(5).Z(10).ID("modal")
+
+// Compose and render
+comp := lipgloss.NewCompositor(base, modal)
+lipgloss.Println(comp.Render())
+
+// Hit testing
+hit := comp.Hit(x, y)
+```
+
+---
+
+## New Border Types
+
+```go
+// v2 — new border constructors
+lipgloss.MarkdownBorder()           // markdown table style
+lipgloss.InnerHalfBlockBorder()     // half block inner
+lipgloss.OuterHalfBlockBorder()     // half block outer
+```
+
+---
+
+## New Color Functions
+
+```go
+// v2 — color manipulation
+lipgloss.Alpha(c, 0.5)              // adjust alpha
+lipgloss.Darken(c, 0.2)             // darken by percentage
+lipgloss.Lighten(c, 0.2)            // lighten by percentage
+lipgloss.Complementary(c)           // 180° on color wheel
+lipgloss.Blend1D(steps, c1, c2)     // 1D gradient
+lipgloss.Blend2D(w, h, angle, c1, c2) // 2D gradient
+```
 
 ---
 
@@ -226,7 +299,11 @@ New methods on `*tree.Tree`:
 | Print | `fmt.Println(s.Render("hi"))` | `lipgloss.Println(s.Render("hi"))` |
 | Renderer | `renderer.NewStyle()` | `lipgloss.NewStyle()` |
 | Whitespace fg | `WithWhitespaceForeground(c)` | `WithWhitespaceStyle(s.Foreground(c))` |
+| Whitespace bg | `WithWhitespaceBackground(c)` | `WithWhitespaceStyle(s.Background(c))` |
 | Underline | `s.Underline(true)` | `s.Underline(true)` or `s.UnderlineStyle(lipgloss.UnderlineCurly)` |
+| No color | N/A | `lipgloss.NoColor{}` |
+| Blend colors | N/A | `lipgloss.Blend1D()`, `lipgloss.Blend2D()` |
+| Compositing | N/A | `lipgloss.NewCompositor()`, `lipgloss.NewLayer()` |
 
 ## Removed Symbols
 
@@ -249,3 +326,24 @@ New methods on `*tree.Tree`:
 | `WithWhitespaceForeground(c)` | `WithWhitespaceStyle(s)` |
 | `WithWhitespaceBackground(c)` | `WithWhitespaceStyle(s)` |
 | `renderer.NewStyle()` | `lipgloss.NewStyle()` |
+
+## New Symbols in v2
+
+| Symbol | Description |
+|---|---|
+| `lipgloss.NoColor{}` | Absence of color |
+| `lipgloss.Alpha(c, a)` | Adjust color alpha |
+| `lipgloss.Darken(c, pct)` | Darken color |
+| `lipgloss.Lighten(c, pct)` | Lighten color |
+| `lipgloss.Complementary(c)` | Complementary color |
+| `lipgloss.Blend1D(n, colors...)` | 1D color gradient |
+| `lipgloss.Blend2D(w, h, angle, colors...)` | 2D color gradient |
+| `lipgloss.NewLayer(content)` | Create compositing layer |
+| `lipgloss.NewCompositor(layers...)` | Compose layers |
+| `lipgloss.NewCanvas(w, h)` | Low-level cell buffer |
+| `lipgloss.StrikethroughSpaces(bool)` | Style method |
+| `lipgloss.UnderlineSpaces(bool)` | Style method |
+| `list.Alphabet` | Enumerator |
+| `list.Asterisk` | Enumerator |
+| `tree.Root(root)` | Constructor shorthand |
+| `tree.RoundedEnumerator` | Tree branch style |

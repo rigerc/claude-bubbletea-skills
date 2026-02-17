@@ -10,6 +10,17 @@ import (
 	"template-v2-enhanced/internal/ui/styles"
 )
 
+// Sizing constants for consistent view dimensions across all screens.
+const (
+	// MaxContentHeight is the maximum height for any screen's main content area.
+	// Views will be capped at this height or 1/3 of terminal height, whichever is smaller.
+	MaxContentHeight = 25
+
+	// MinContentHeight is the minimum height for any screen's main content area.
+	// This ensures UI elements remain usable even on small terminals.
+	MinContentHeight = 10
+)
+
 // ScreenBase holds state shared by every screen: adaptive theme, terminal
 // dimensions, global key bindings, and a help bar component.
 // Embed it in your Screen struct and call its helpers to avoid repeating
@@ -67,4 +78,39 @@ func (b *ScreenBase) HeaderView() string {
 // RenderHelp renders the help bar from any help.KeyMap, with a top margin.
 func (b *ScreenBase) RenderHelp(km help.KeyMap) string {
 	return lipgloss.NewStyle().MarginTop(1).Render(b.Help.View(km))
+}
+
+// CalculateContentHeight returns the appropriate content height based on:
+// 1. Available space after subtracting header and help heights
+// 2. MaxContentHeight constant (or 1/3 of terminal height, whichever is smaller)
+// 3. MinContentHeight minimum
+//
+// The headerHeight and helpHeight parameters should be calculated using
+// lipgloss.Height() on the actual rendered header and help views.
+func (b *ScreenBase) CalculateContentHeight(headerHeight, helpHeight int) int {
+	if !b.IsSized() {
+		return MinContentHeight
+	}
+
+	_, frameV := b.Theme.App.GetFrameSize()
+	availableH := b.Height - frameV - headerHeight - helpHeight
+
+	// Cap at MaxContentHeight or 1/3 of terminal height, whichever is smaller
+	maxH := MaxContentHeight
+	if thirdHeight := b.Height / 3; thirdHeight < maxH {
+		maxH = thirdHeight
+	}
+
+	// Use the smaller of available space or max height
+	contentH := availableH
+	if contentH > maxH {
+		contentH = maxH
+	}
+
+	// Enforce minimum
+	if contentH < MinContentHeight {
+		contentH = MinContentHeight
+	}
+
+	return contentH
 }

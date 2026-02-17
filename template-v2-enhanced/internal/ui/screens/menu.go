@@ -157,31 +157,12 @@ func (s *MenuScreen) updateListSize() {
 	if !s.IsSized() {
 		return
 	}
-	frameH, frameV := s.Theme.App.GetFrameSize()
+	frameH, _ := s.Theme.App.GetFrameSize()
 	headerH := lipgloss.Height(s.HeaderView())
+	helpH := lipgloss.Height(s.RenderHelp(s.list))
 
-	// Calculate available height after frame and header
-	availH := s.Height - frameV - headerH
+	// Calculate content height using shared helper
+	contentH := s.CalculateContentHeight(headerH, helpH)
 
-	// Get actual item count (not filtered)
-	itemCount := len(s.list.Items())
-	if itemCount == 0 {
-		itemCount = 1
-	}
-
-	// Each item is 2 lines when description is shown (title + description)
-	// Add space for help section (4 lines)
-	itemLines := itemCount * 4
-	helpLines := 4
-	targetH := itemLines + helpLines
-
-	// Clamp to available height
-	if targetH > availH {
-		targetH = availH
-	}
-	if targetH < 10 {
-		targetH = 10
-	}
-
-	s.list.SetSize(s.Width-frameH, targetH)
+	s.list.SetSize(s.Width-frameH, contentH)
 }

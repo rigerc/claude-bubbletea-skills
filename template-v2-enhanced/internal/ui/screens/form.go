@@ -16,11 +16,12 @@ import (
 // handling global keys (ESC, Ctrl+C, ?) alongside form-specific keys.
 type FormScreen struct {
 	ScreenBase
-	form           *huh.Form
-	onSubmit       func() tea.Cmd
-	onAbort        func() tea.Cmd
-	formBuilder    func() *huh.Form // Function to rebuild the form when needed
-	needsReset     bool            // Flag indicating form needs reset on next Update
+	form              *huh.Form
+	onSubmit          func() tea.Cmd
+	onAbort           func() tea.Cmd
+	formBuilder       func() *huh.Form // Function to rebuild the form when needed
+	needsReset        bool            // Flag indicating form needs reset on next Update
+	maxContentHeight  int             // Optional override for max content height
 }
 
 // NewFormScreen creates a form screen with theme and callbacks.
@@ -53,20 +54,25 @@ func NewFormScreen(
 // newFormScreenWithBuilder is like NewFormScreen but takes a form builder
 // function that can rebuild the form when it needs to be reset (e.g., after
 // navigation returns to this screen).
+//
+// The maxContentHeight parameter allows overriding the default MaxContentHeight
+// for forms that need more space (e.g., menus). Pass 0 to use the default.
 func newFormScreenWithBuilder(
 	formBuilder func() *huh.Form,
 	isDark bool,
 	appName string,
 	onSubmit func() tea.Cmd,
 	onAbort func() tea.Cmd,
+	maxContentHeight int,
 ) *FormScreen {
 	form := formBuilder()
 	fs := &FormScreen{
-		ScreenBase:  NewBase(isDark, appName),
-		form:        form,
-		onSubmit:    onSubmit,
-		onAbort:     onAbort,
-		formBuilder: formBuilder,
+		ScreenBase:     NewBase(isDark, appName),
+		form:           form,
+		onSubmit:       onSubmit,
+		onAbort:        onAbort,
+		formBuilder:    formBuilder,
+		maxContentHeight: maxContentHeight,
 	}
 
 	// Apply theme and keymap
@@ -124,12 +130,42 @@ func (s *FormScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 	return s, cmd
 }
 
-// View renders the form screen with header and help bar.
+// View renders the form screen with header.
+// The form view is wrapped with a height constraint to ensure consistent sizing.
+// Note: Huh forms render their own help internally, so we don't call RenderHelp.
 func (s *FormScreen) View() string {
+	// Calculate the max height for the form content
+	headerH := lipgloss.Height(s.HeaderView())
+
+	// Estimate form internal height (usually includes help at the bottom)
+	formInternalHelpH := 4 // Approximate height for form's internal help
+
+	// Use custom max height if set, otherwise use shared helper
+	maxFormH := s.CalculateContentHeight(headerH, formInternalHelpH)
+	if s.maxContentHeight > 0 {
+		// Apply custom max height override
+		_, frameV := s.Theme.App.GetFrameSize()
+		availableH := s.Height - frameV - headerH - formInternalHelpH
+		customMax := s.maxContentHeight
+		if customMax > availableH {
+			customMax = availableH
+		}
+		if customMax < MinContentHeight {
+			customMax = MinContentHeight
+		}
+		maxFormH = customMax
+	}
+
+	// Wrap the form view with height constraint
+	formView := lipgloss.NewStyle().
+		Height(maxFormH).
+		MaxHeight(maxFormH).
+		Render(s.form.View())
+
 	return s.Theme.App.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			s.HeaderView(),
-			s.form.View(),
+			formView,
 		),
 	)
 }

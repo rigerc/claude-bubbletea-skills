@@ -2,8 +2,8 @@
 package screens
 
 import (
-	"charm.land/huh/v2"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 
 	"template-v2-enhanced/internal/ui/nav"
 )
@@ -40,13 +40,13 @@ func NewHuhMenuScreen(options []HuhMenuOption, isDark bool, appName string) *Huh
 		}
 
 		// Create form with Select field
+		// Set explicit height to show more menu items
 		return huh.NewForm(
 			huh.NewGroup(
 				huh.NewSelect[int]().
-					Title("Main Menu").
 					Options(huhOptions...).
 					Value(selectedIdx).
-					Height(len(menuOpts)),
+					Height(10),
 			),
 		).WithShowHelp(true).WithShowErrors(true)
 	}
@@ -65,7 +65,7 @@ func NewHuhMenuScreen(options []HuhMenuOption, isDark bool, appName string) *Huh
 		return tea.Quit // ESC quits from main menu
 	}
 
-	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort)
+	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort, 0)
 
 	return &HuhMenuScreen{
 		FormScreen:  fs,

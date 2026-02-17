@@ -28,6 +28,32 @@ func ThemeFunc(theme styles.Theme) huh.ThemeFunc {
 				lipgloss.Color("#10CC85"),
 			))
 
+		// Remove borders - explicitly disable all sides
+		huhTheme.Form.Base = huhTheme.Form.Base.
+			BorderTop(false).
+			BorderRight(false).
+			BorderBottom(false).
+			BorderLeft(false)
+		huhTheme.Group.Base = huhTheme.Group.Base.
+			BorderTop(false).
+			BorderRight(false).
+			BorderBottom(false).
+			BorderLeft(false)
+		huhTheme.Focused.Base = huhTheme.Focused.Base.
+			BorderTop(false).
+			BorderRight(false).
+			BorderBottom(false).
+			BorderLeft(false)
+		huhTheme.Blurred.Base = huhTheme.Blurred.Base.
+			BorderTop(false).
+			BorderRight(false).
+			BorderBottom(false).
+			BorderLeft(false)
+
+		// Increase spacing between select options using margin
+		huhTheme.Focused.Option = huhTheme.Focused.Option.Margin(2, 0)
+		huhTheme.Blurred.Option = huhTheme.Blurred.Option.Margin(2, 0)
+
 		return huhTheme
 	}
 }

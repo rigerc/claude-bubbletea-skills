@@ -11,7 +11,8 @@
       "Bash(go list:*)",
       "Bash(go mod download:*)",
       "Bash(timeout 2 go run:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(go doc:*)"
     ]
   }
 }

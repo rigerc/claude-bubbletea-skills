@@ -79,6 +79,7 @@ Underline(bool)
 UnderlineStyle(Underline)   // UnderlineNone/Single/Double/Curly/Dotted/Dashed
 UnderlineColor(color.Color)
 Strikethrough(bool)
+StrikethroughSpaces(bool)
 Faint(bool)
 Blink(bool)
 Reverse(bool)
@@ -154,6 +155,16 @@ Inherit(Style)              // fills unset props from parent
 SetString(str string) Style // bind content
 String() string             // render with SetString content
 Render(str ...string) string
+Value() string              // raw underlying string
+```
+
+### Unset methods
+
+All properties have corresponding unset methods:
+```
+UnsetBold(), UnsetItalic(), UnsetUnderline(), UnsetStrikethrough(),
+UnsetForeground(), UnsetBackground(), UnsetWidth(), UnsetHeight(),
+UnsetAlign(), UnsetPadding(), UnsetMargin(), UnsetBorder(), etc.
 ```
 
 ---
@@ -198,7 +209,35 @@ lipgloss.NoTabConversion   // -1 — pass to TabWidth to disable replacement
 
 ---
 
+## Border Constructors
+
+```go
+lipgloss.NormalBorder()           // ─ │ ┌ ┐ └ ┘
+lipgloss.RoundedBorder()          // ─ │ ╭ ╮ ╰ ╯
+lipgloss.ThickBorder()            // ━ ┃ ┏ ┓ ┗ ┛
+lipgloss.DoubleBorder()           // ═ ║ ╔ ╗ ╚ ╝
+lipgloss.BlockBorder()            // █ (solid blocks)
+lipgloss.HiddenBorder()           // invisible
+lipgloss.ASCIIBorder()            // - | + + + +
+lipgloss.MarkdownBorder()         // markdown table style
+lipgloss.InnerHalfBlockBorder()   // half block inner
+lipgloss.OuterHalfBlockBorder()   // half block outer
+```
+
+Custom border:
+```go
+b := lipgloss.Border{
+    Top: "─", Bottom: "─", Left: "│", Right: "│",
+    TopLeft: "╭", TopRight: "╮",
+    BottomLeft: "╰", BottomRight: "╯",
+}
+```
+
+---
+
 ## Compositing
+
+### Layer
 
 ```go
 // Create layers
@@ -206,17 +245,46 @@ base := lipgloss.NewLayer(content)
 modal := lipgloss.NewLayer(content, childLayer...).
     X(xOffset).Y(yOffset).Z(zIndex).ID("modal")
 
+// Layer methods
+layer.GetContent() string
+layer.GetID() string
+layer.GetX() / GetY() / GetZ() int
+layer.Width() / Height() int
+layer.AddLayers(layers ...*Layer) *Layer
+layer.GetLayer(id string) *Layer
+layer.MaxZ() int
+```
+
+### Compositor
+
+```go
 // Compose
 comp := lipgloss.NewCompositor(base, modal, ...)
-output := comp.Render()
 
-// Hit testing
-hit := comp.Hit(x, y) // returns LayerHit with ID
+// Methods
+comp.AddLayers(layers ...*Layer) *Compositor
+comp.Bounds() image.Rectangle
+comp.Hit(x, y int) LayerHit
+comp.GetLayer(id string) *Layer
+comp.Refresh()                    // re-flatten after changes
+comp.Render() string
 
-// Low-level canvas
+// LayerHit methods
+hit.Empty() bool
+hit.ID() string
+hit.Layer() *Layer
+hit.Bounds() image.Rectangle
+```
+
+### Canvas
+
+```go
 canvas := lipgloss.NewCanvas(width, height)
-canvas.Compose(layer)
-canvas.Render()
+canvas.Resize(width, height)
+canvas.Clear()
+canvas.Compose(drawer) *Canvas
+canvas.Render() string
+canvas.Width() / Height() int
 ```
 
 ---
@@ -225,17 +293,49 @@ canvas.Render()
 
 Import: `charm.land/lipgloss/v2/list`
 
+### Constructors
+
 ```go
-l := list.New(items...).
-    Enumerator(list.Bullet).           // or Dash, Roman, Arabic, custom func
-    EnumeratorStyle(style).
-    EnumeratorStyleFunc(func(items list.Items, i int) lipgloss.Style).
-    ItemStyle(style).
-    ItemStyleFunc(func(items list.Items, i int) lipgloss.Style).
-    Item(nestedList)
+list.New(items...)
 ```
 
-Custom enumerator: `func(items list.Items, i int) string`
+### Methods
+
+```go
+l.Enumerator(enumerator) *List                    // Bullet, Dash, Roman, Arabic, Alphabet, Asterisk
+l.EnumeratorStyle(style) *List
+l.EnumeratorStyleFunc(f StyleFunc) *List
+l.Item(item) *List                                // add single item
+l.Items(items...) *List                           // add multiple items
+l.ItemStyle(style) *List
+l.ItemStyleFunc(f StyleFunc) *List
+l.Indenter(indenter) *List
+l.Hide(hide bool) *List
+l.Hidden() bool
+l.Offset(start, end int) *List
+l.String() string
+l.Value() string
+```
+
+### Types
+
+```go
+list.Enumerator func(items Items, index int) string
+list.Indenter func(items Items, index int) string
+list.StyleFunc func(items Items, index int) lipgloss.Style
+list.Items // alias for tree.Children
+```
+
+### Built-in enumerators
+
+```go
+list.Bullet(items, i)      // •
+list.Dash(items, i)        // -
+list.Roman(items, i)       // I. II. III.
+list.Arabic(items, i)      // 1. 2. 3.
+list.Alphabet(items, i)    // a. b. c.
+list.Asterisk(items, i)    // *
+```
 
 ---
 
@@ -243,22 +343,60 @@ Custom enumerator: `func(items list.Items, i int) string`
 
 Import: `charm.land/lipgloss/v2/table`
 
+### Constants
+
 ```go
-t := table.New().
-    Border(lipgloss.Border).
-    BorderStyle(lipgloss.Style).
-    BorderTop/Right/Bottom/Left(bool).
-    Headers(cols ...string).
-    Rows(rows ...[]string).
-    Row(cols ...string).
-    StyleFunc(func(row, col int) lipgloss.Style).
-    Width(int).
-    Height(int).
-    Offset(n int).               // scroll Y offset
-    String() string              // implements fmt.Stringer
+table.HeaderRow = -1  // use in StyleFunc for header row
 ```
 
-`row == table.HeaderRow` in StyleFunc to style the header.
+### Constructors
+
+```go
+table.New() *Table
+table.NewStringData(rows...[]string) *StringData
+table.NewFilter(data Data) *Filter
+```
+
+### Table methods
+
+```go
+t.Border(border lipgloss.Border) *Table
+t.BorderTop/Right/Bottom/Left(bool) *Table
+t.BorderColumn(bool) *Table        // column separators
+t.BorderHeader(bool) *Table        // header separator
+t.BorderRow(bool) *Table           // row separators
+t.BorderStyle(style) *Table
+t.Data(data Data) *Table
+t.Headers(cols ...string) *Table
+t.Row(cols ...string) *Table
+t.Rows(rows ...[]string) *Table
+t.ClearRows() *Table
+t.StyleFunc(fn StyleFunc) *Table
+t.Width(int) *Table
+t.Height(int) *Table
+t.Offset(n int) *Table             // scroll Y offset
+t.Wrap(bool) *Table
+t.Render() string
+t.String() string
+```
+
+### Data interface
+
+```go
+type Data interface {
+    At(row, cell int) string
+    Rows() int
+    Columns() int
+}
+```
+
+### Types
+
+```go
+table.StyleFunc func(row, col int) lipgloss.Style
+table.StringData // implements Data
+table.Filter     // wraps Data with filtering
+```
 
 ---
 
@@ -266,20 +404,141 @@ t := table.New().
 
 Import: `charm.land/lipgloss/v2/tree`
 
-```go
-t := tree.New().
-    Root("name").
-    Child(items...).             // strings or *Tree
-    EnumeratorStyle(style).
-    EnumeratorStyleFunc(func(children tree.Children, i int) lipgloss.Style).
-    ItemStyle(style).
-    ItemStyleFunc(func(children tree.Children, i int) lipgloss.Style).
-    IndenterStyle(style).
-    IndenterStyleFunc(func(children tree.Children, i int) lipgloss.Style).
-    Width(int)
+### Constructors
 
-// Subtrees
-tree.Root("dir/").Child("file.go", "file_test.go")
+```go
+tree.New() *Tree
+tree.Root(root any) *Tree           // shorthand for tree.New().Root(root)
+tree.NewStringData(data ...string) Children
+tree.NewFilter(data Children) *Filter
+tree.NewLeaf(value any, hidden bool) *Leaf
+```
+
+### Tree methods
+
+```go
+t.Root(root any) *Tree
+t.Child(children...any) *Tree       // strings or *Tree
+t.Enumerator(enum Enumerator) *Tree // DefaultEnumerator, RoundedEnumerator
+t.EnumeratorStyle(style) *Tree
+t.EnumeratorStyleFunc(fn StyleFunc) *Tree
+t.ItemStyle(style) *Tree
+t.ItemStyleFunc(fn StyleFunc) *Tree
+t.Indenter(indenter) *Tree
+t.RootStyle(style) *Tree
+t.Hide(hide bool) *Tree
+t.Hidden() bool
+t.Offset(start, end int) *Tree
+t.Children() Children
+t.SetHidden(bool)
+t.SetValue(value any)
+t.String() string
+t.Value() string
+```
+
+### Types
+
+```go
+tree.Enumerator func(children Children, index int) string
+tree.Indenter func(children Children, index int) string
+tree.StyleFunc func(children Children, i int) lipgloss.Style
+tree.Children interface {
+    At(index int) Node
+    Length() int
+}
+tree.Node interface {
+    fmt.Stringer
+    Value() string
+    Children() Children
+    Hidden() bool
+    SetHidden(bool)
+    SetValue(any)
+}
+tree.NodeChildren []Node           // implements Children
+tree.Leaf                          // implements Node
+```
+
+### Built-in enumerators
+
+```go
+tree.DefaultEnumerator   // ├── └──
+tree.RoundedEnumerator   // ├── ╰──
+```
+
+---
+
+## Integration with huh v2
+
+huh v2 forms use Lip Gloss v2 for theming. Import both packages:
+
+```go
+import (
+    "charm.land/huh/v2"
+    "charm.land/lipgloss/v2"
+)
+```
+
+### Theme structure
+
+```go
+type Styles struct {
+    Form           FormStyles
+    Group          GroupStyles
+    FieldSeparator lipgloss.Style
+    Blurred        FieldStyles
+    Focused        FieldStyles
+    Help           help.Styles
+}
+```
+
+### Creating a custom theme
+
+```go
+theme := huh.ThemeFunc(func(isDark bool) *huh.Styles {
+    s := huh.ThemeCharm(isDark) // Start with base
+
+    // Override focused styles
+    s.Focused.Title = lipgloss.NewStyle().
+        Bold(true).
+        Foreground(lipgloss.Color("#FF5F87"))
+
+    s.Focused.Base = lipgloss.NewStyle().
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#874BFD"))
+
+    return s
+})
+
+form.WithTheme(theme)
+```
+
+### Key FieldStyles properties
+
+```go
+type FieldStyles struct {
+    Base           lipgloss.Style
+    Title          lipgloss.Style
+    Description    lipgloss.Style
+    ErrorIndicator lipgloss.Style
+    ErrorMessage   lipgloss.Style
+    SelectSelector lipgloss.Style
+    Option         lipgloss.Style
+    NextIndicator  lipgloss.Style
+    PrevIndicator  lipgloss.Style
+    Directory      lipgloss.Style
+    File           lipgloss.Style
+    MultiSelectSelector lipgloss.Style
+    SelectedOption      lipgloss.Style
+    SelectedPrefix      lipgloss.Style
+    UnselectedOption    lipgloss.Style
+    UnselectedPrefix    lipgloss.Style
+    TextInput           TextInputStyles
+    FocusedButton       lipgloss.Style
+    BlurredButton       lipgloss.Style
+    Card                lipgloss.Style
+    NoteTitle           lipgloss.Style
+    Next                lipgloss.Style
+}
 ```
 
 ---
@@ -297,3 +556,8 @@ color := compat.AdaptiveColor{
 }
 // compat reads os.Stdin/os.Stdout globally, just like v1
 ```
+
+Available types:
+- `compat.AdaptiveColor`
+- `compat.CompleteColor`
+- `compat.CompleteAdaptiveColor`

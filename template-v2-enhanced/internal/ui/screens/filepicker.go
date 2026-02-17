@@ -150,16 +150,12 @@ func (s *FilePickerScreen) updateSize() {
 	if !s.IsSized() {
 		return
 	}
-	_, frameV := s.Theme.App.GetFrameSize()
 	headerH := lipgloss.Height(s.HeaderView())
 	statusH := lipgloss.Height(s.statusView())
+	helpH := lipgloss.Height(s.RenderHelp(filePickerHelpKeys{fp: s.fp.KeyMap, app: s.Keys}))
 
-	fpH := s.Height - frameV - headerH - statusH
-	if cap := s.Height / 3; fpH > cap {
-		fpH = cap
-	}
-	if fpH < 4 {
-		fpH = 4
-	}
+	// Calculate content height using shared helper
+	fpH := s.CalculateContentHeight(headerH+statusH, helpH)
+
 	s.fp.SetHeight(fpH)
 }

@@ -62,7 +62,7 @@ func NewHuhFilePickerScreen(startDir string, isDark bool, appName string) *HuhFi
 		return nav.Pop() // ESC goes back to previous screen
 	}
 
-	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort)
+	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort, 0)
 
 	return &HuhFilePickerScreen{
 		FormScreen: fs,

@@ -151,16 +151,13 @@ func (s *DetailScreen) updateViewportSize() {
 	if !s.IsSized() {
 		return
 	}
-	_, frameV := s.Theme.App.GetFrameSize()
 	s.Help.SetWidth(s.ContentWidth())
 	headerH := lipgloss.Height(s.HeaderView())
 	footerH := lipgloss.Height(s.footerView())
+	helpH := lipgloss.Height(s.RenderHelp(detailHelpKeys{vp: s.vp.KeyMap, app: s.Keys}))
 
-	// Help sits below the footer (outside the pager block) so is not subtracted here.
-	vpH := s.Height - frameV - headerH - footerH
-	if cap := s.Height / 3; vpH > cap {
-		vpH = cap
-	}
+	// Calculate content height using shared helper
+	vpH := s.CalculateContentHeight(headerH+footerH, helpH)
 	s.vp.SetWidth(s.ContentWidth())
 	s.vp.SetHeight(vpH)
 }

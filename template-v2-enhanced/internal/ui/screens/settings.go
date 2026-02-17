@@ -215,7 +215,7 @@ func NewSettingsScreen(isDark bool, appName string) *SettingsScreen {
 		return nav.Pop()
 	}
 
-	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort)
+	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort, 0)
 
 	return &SettingsScreen{
 		FormScreen: fs,

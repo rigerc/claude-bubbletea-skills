@@ -20,7 +20,7 @@ terminal layouts. It is a pure value type library — no global renderer, no
 hidden state. Colors are downsampled at the output layer.
 
 ```bash
-go get charm.land/lipgloss/v2
+go get charm.land/lipgloss/v2@v2.0.0-beta.3.0.20251205162909-7869489d8971
 ```
 
 ## Quick Reference
@@ -66,6 +66,7 @@ lipgloss.Println(s.Render("Hello!"))
 | `UnderlineStyle(Underline)` | `UnderlineSingle/Double/Curly/Dotted/Dashed/None` |
 | `UnderlineColor(color.Color)` | Color the underline separately |
 | `Strikethrough(bool)` | Strikethrough |
+| `StrikethroughSpaces(bool)` | Apply strikethrough to spaces between words |
 | `Faint(bool)` | Faint/dim text |
 | `Blink(bool)` | Blinking text |
 | `Reverse(bool)` | Reverse foreground/background |
@@ -147,6 +148,17 @@ s.String()              // alias for Render with SetString content
 s.SetString("content")  // bind content to style
 ```
 
+### Unset methods
+
+All style properties can be unset:
+```go
+s.UnsetBold()
+s.UnsetForeground()
+s.UnsetPadding()
+s.UnsetBorder()
+// etc.
+```
+
 ---
 
 ## Color System
@@ -165,6 +177,9 @@ c := lipgloss.Red      // lipgloss.Black/Red/Green/.../BrightWhite
 
 // ANSI256
 c := lipgloss.ANSIColor(134)
+
+// NoColor - absence of color styling
+c := lipgloss.NoColor{}
 ```
 
 ### Adaptive colors (light/dark terminals)
@@ -206,6 +221,8 @@ func newStyles(isDark bool) styles {
 ### Color profile selection (`Complete`)
 
 ```go
+import "github.com/charmbracelet/colorprofile"
+
 p := colorprofile.Detect(os.Stdout, os.Environ())
 complete := lipgloss.Complete(p)
 c := complete(
@@ -311,6 +328,21 @@ overlay := lipgloss.NewLayer(badge).X(80).Y(2).Z(10)
 
 comp := lipgloss.NewCompositor(base, modal, overlay)
 lipgloss.Println(comp.Render())
+
+// Hit testing
+hit := comp.Hit(x, y) // returns LayerHit with ID
+if !hit.Empty() {
+    fmt.Println("Clicked layer:", hit.ID())
+}
+```
+
+### Canvas
+
+Low-level cell buffer for manual composition:
+```go
+canvas := lipgloss.NewCanvas(width, height)
+canvas.Compose(layer)
+result := canvas.Render()
 ```
 
 ---
@@ -332,10 +364,19 @@ l.Item(
     list.New("Sub A", "Sub B"),
 )
 
+// Conditional styling
+l.ItemStyleFunc(func(items list.Items, i int) lipgloss.Style {
+    if i == selected {
+        return selectedStyle
+    }
+    return normalStyle
+})
+
 lipgloss.Println(l)
 ```
 
-Built-in enumerators: `list.Bullet`, `list.Dash`, `list.Roman`, `list.Arabic`.
+Built-in enumerators: `list.Bullet`, `list.Dash`, `list.Roman`, `list.Arabic`,
+`list.Alphabet`, `list.Asterisk`.
 Custom: `func(items list.Items, i int) string`.
 
 ### table (`charm.land/lipgloss/v2/table`)
@@ -379,11 +420,80 @@ t := tree.New().
             Child("README.md"),
         "go.mod",
     ).
+    Enumerator(tree.RoundedEnumerator).
     EnumeratorStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("99"))).
     ItemStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("255")))
 
 lipgloss.Println(t)
 ```
+
+---
+
+## Integration with huh v2 Forms
+
+Lip Gloss v2 styles power [huh](https://github.com/charmbracelet/huh) v2 forms. Create custom themes by implementing `huh.Theme`:
+
+```go
+import (
+    "charm.land/huh/v2"
+    "charm.land/lipgloss/v2"
+)
+
+// Create a custom theme
+customTheme := huh.ThemeFunc(func(isDark bool) *huh.Styles {
+    s := &huh.Styles{}
+
+    // Form container
+    s.Form.Base = lipgloss.NewStyle().
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#7D56F4")).
+        Padding(2, 4)
+
+    // Focused (active) field styles
+    s.Focused.Title = lipgloss.NewStyle().
+        Bold(true).
+        Foreground(lipgloss.Color("#7D56F4"))
+
+    s.Focused.SelectSelector = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#FF6AD2")).
+        SetString("▸ ")
+
+    s.Focused.FocusedButton = lipgloss.NewStyle().
+        Background(lipgloss.Color("#FF6AD2")).
+        Foreground(lipgloss.Color("#FFFFFF")).
+        Padding(0, 3)
+
+    // Blurred (inactive) field styles
+    s.Blurred = s.Focused
+    s.Blurred.Title = s.Blurred.Title.Foreground(lipgloss.Color("#666666"))
+
+    return s
+})
+
+// Apply theme to form
+form := huh.NewForm(
+    huh.NewGroup(
+        huh.NewInput().Title("Name").Value(&name),
+        huh.NewConfirm().Title("Proceed?").Value(&ok),
+    ),
+).WithTheme(customTheme)
+```
+
+### huh Style Structure
+
+| Style | Purpose |
+|---|---|
+| `s.Form.Base` | Container border/padding |
+| `s.Focused.Title` | Active field title |
+| `s.Focused.Description` | Active field help text |
+| `s.Focused.SelectSelector` | Selection indicator (▸) |
+| `s.Focused.Option` | Select/menu options |
+| `s.Focused.FocusedButton` | Active button (Confirm) |
+| `s.Focused.TextInput.Prompt` | Input prompt character |
+| `s.Blurred.*` | Inactive field styles |
+| `s.Help.*` | Keybinding help text |
+
+See `references/_examples/huh-theme.go` for a complete custom theme example.
 
 ---
 
@@ -399,6 +509,8 @@ See `references/_examples/` for runnable examples:
 | `table-languages.go` | Styled table with headers, alternating rows, custom column widths |
 | `list-grocery.go` | Custom enumerator + per-item style functions |
 | `blending-1d.go` | `Blend1D` color gradients rendered as color bars |
+| `compositing.go` | Layer compositing with hit testing |
+| `huh-theme.go` | Custom huh form theme using Lip Gloss styles |
 
 ---
 
