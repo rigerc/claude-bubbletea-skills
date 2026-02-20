@@ -6,12 +6,13 @@ package config
 // setting environment variables.
 func DefaultConfig() *Config {
 	return &Config{
-		LogLevel: "info",
-		Debug:    false,
+		LogLevel:    "info",
+		Debug:       false,
+		ProjectsDir: "~",
 		UI: UIConfig{
-			AltScreen:     false,
-			MouseEnabled:  true,
-			ThemeName:     "default",
+			AltScreen:    false,
+			MouseEnabled: true,
+			ThemeName:    "default",
 		},
 		App: AppConfig{
 			Name:    "projector",

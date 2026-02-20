@@ -16,8 +16,6 @@ import (
 )
 
 func main() {
-	// Execute the Cobra CLI. Subcommands (version, completion) set runUI=false
-	// and exit early; the root command falls through to the TUI.
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Command execution failed: %v\n", err)
 		os.Exit(1)
@@ -29,8 +27,11 @@ func main() {
 
 	cfg := loadConfig()
 
-	// In TUI mode the terminal is occupied, so all logging must go to a file
-	// (debug mode) or be silenced entirely (normal mode).
+	if err := cfg.ValidateProjectsDir(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	logOutput, cleanup, err := setupLogOutput(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
@@ -93,15 +94,16 @@ func loadConfig() *config.Config {
 		if err == nil {
 			cfg = fileCfg
 		}
-		// ErrConfigNotFound or parse error → silently fall back to defaults
 	}
 
-	// CLI flags override file/defaults only when explicitly passed.
 	if cmd.IsDebugMode() {
 		cfg.Debug = true
 	}
 	if cmd.WasLogLevelSet() {
 		cfg.LogLevel = cmd.GetLogLevel()
+	}
+	if cmd.WasProjectsDirSet() {
+		cfg.ProjectsDir = cmd.GetProjectsDir()
 	}
 
 	return cfg

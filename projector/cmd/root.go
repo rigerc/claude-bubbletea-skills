@@ -7,18 +7,11 @@ import (
 )
 
 var (
-	// cfgFile holds the path to the configuration file.
-	cfgFile string
-
-	// debugMode indicates if debug mode is enabled.
-	debugMode bool
-
-	// logLevel sets the logging verbosity.
-	logLevel string
-
-	// runUI indicates whether to run the TUI after command execution.
-	// This is set to false when running subcommands like version or completion.
-	runUI = true
+	cfgFile     string
+	debugMode   bool
+	logLevel    string
+	projectsDir string
+	runUI       = true
 )
 
 // rootCmd represents the base command when called without any subcommands.
@@ -38,6 +31,9 @@ This template includes:
 	Example: `  # Run with default settings
   projector
 
+  # Scan a specific projects directory
+  projector --dir ~/code
+
   # Run with custom config file
   projector --config /path/to/config.json
 
@@ -47,10 +43,7 @@ This template includes:
   # Show version information
   projector version`,
 	Version: "1.0.0",
-	// Run executes the root command.
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// The actual TUI application will be run from the main package
-		// after the Cobra command is executed.
 		return nil
 	},
 }
@@ -83,17 +76,17 @@ func ShouldRunUI() bool {
 
 // init initializes the root command with flags and configuration.
 func init() {
-	// Config file flag
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "",
 		"Path to configuration file (default: $HOME/.projector.json)")
 
-	// Debug mode flag
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false,
 		"Enable debug mode with trace logging")
 
-	// Log level flag
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info",
 		"Set logging level (trace, debug, info, warn, error, fatal)")
+
+	rootCmd.PersistentFlags().StringVarP(&projectsDir, "dir", "d", "",
+		"Directory to scan for projects (overrides config file)")
 }
 
 // GetConfigFile returns the path to the configuration file.
@@ -110,4 +103,12 @@ func GetLogLevel() string {
 // Use this to distinguish an explicit flag from Cobra's default value.
 func WasLogLevelSet() bool {
 	return rootCmd.PersistentFlags().Changed("log-level")
+}
+
+func GetProjectsDir() string {
+	return projectsDir
+}
+
+func WasProjectsDirSet() bool {
+	return rootCmd.PersistentFlags().Changed("dir")
 }

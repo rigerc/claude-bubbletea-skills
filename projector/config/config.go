@@ -33,6 +33,10 @@ type Config struct {
 	// and enables additional debugging features.
 	Debug bool `json:"debug" mapstructure:"debug" koanf:"debug"`
 
+	// ProjectsDir specifies the directory to scan for projects.
+	// Supports shell expansion (e.g., ~/code).
+	ProjectsDir string `json:"projectsDir" mapstructure:"projectsDir" koanf:"projectsDir"`
+
 	// UI contains user interface specific configuration.
 	UI UIConfig `json:"ui" mapstructure:"ui" koanf:"ui"`
 
@@ -119,7 +123,6 @@ func LoadFromBytes(data []byte) (*Config, error) {
 
 // Validate checks that the configuration is valid and returns an error if not.
 func (c *Config) Validate() error {
-	// Validate log level
 	validLogLevels := map[string]bool{
 		"trace": true, "debug": true, "info": true,
 		"warn": true, "error": true, "fatal": true,
@@ -129,6 +132,42 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// ValidateProjectsDir checks that the projects directory exists.
+// It expands ~ to the home directory before checking.
+func (c *Config) ValidateProjectsDir() error {
+	if c.ProjectsDir == "" {
+		return fmt.Errorf("%w: projects directory not configured", ErrInvalidConfig)
+	}
+
+	expanded, err := ExpandDir(c.ProjectsDir)
+	if err != nil {
+		return fmt.Errorf("expanding projects directory: %w", err)
+	}
+
+	if _, err := os.Stat(expanded); os.IsNotExist(err) {
+		return fmt.Errorf("%w: projects directory does not exist: %s", ErrInvalidConfig, expanded)
+	}
+
+	return nil
+}
+
+// ExpandDir expands ~ to the home directory in a path.
+func ExpandDir(path string) (string, error) {
+	if len(path) == 0 {
+		return path, nil
+	}
+
+	if path[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("getting home directory: %w", err)
+		}
+		return home + path[1:], nil
+	}
+
+	return path, nil
 }
 
 // ToJSON converts the configuration to a JSON byte slice.
