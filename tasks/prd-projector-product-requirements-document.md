@@ -205,6 +205,8 @@
 
 ## File Structure (New Components)
 
+PROJECT ALREADY SCAFFOLDED IN `./projector`
+
 ```
 projector/
 ├── internal/
