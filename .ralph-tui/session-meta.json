@@ -1,0 +1,14 @@
+{
+  "id": "5421c325-17f1-4351-a772-e51d6e40e02c",
+  "status": "running",
+  "startedAt": "2026-02-20T22:08:15.852Z",
+  "updatedAt": "2026-02-20T22:08:15.854Z",
+  "agentPlugin": "opencode",
+  "trackerPlugin": "json",
+  "prdPath": "./tasks/prd.json",
+  "currentIteration": 0,
+  "maxIterations": 3,
+  "totalTasks": 0,
+  "tasksCompleted": 0,
+  "cwd": "/mnt/d/dev/projects/bubbletea-v2-scaffold"
+}
