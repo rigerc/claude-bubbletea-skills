@@ -33,7 +33,9 @@
       ],
       "priority": 1,
       "passes": false,
-      "dependsOn": ["US-001"]
+      "dependsOn": [
+        "US-001"
+      ]
     },
     {
       "id": "US-003",
@@ -48,7 +50,9 @@
       ],
       "priority": 2,
       "passes": false,
-      "dependsOn": ["US-001"]
+      "dependsOn": [
+        "US-001"
+      ]
     },
     {
       "id": "US-004",
@@ -62,7 +66,7 @@
         "Show error and exit if directory invalid"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "dependsOn": []
     },
     {
@@ -79,7 +83,9 @@
       ],
       "priority": 2,
       "passes": false,
-      "dependsOn": ["US-001"]
+      "dependsOn": [
+        "US-001"
+      ]
     },
     {
       "id": "US-006",
@@ -95,7 +101,9 @@
       ],
       "priority": 2,
       "passes": false,
-      "dependsOn": ["US-001"]
+      "dependsOn": [
+        "US-001"
+      ]
     },
     {
       "id": "US-007",
@@ -109,7 +117,10 @@
       ],
       "priority": 3,
       "passes": false,
-      "dependsOn": ["US-001", "US-004"]
+      "dependsOn": [
+        "US-001",
+        "US-004"
+      ]
     },
     {
       "id": "US-008",
@@ -130,6 +141,7 @@
   "metadata": {
     "createdAt": "2026-02-20T23:21:00Z",
     "version": "1.0",
-    "sourcePrd": "tasks/prd-projector-product-requirements-document.md"
+    "sourcePrd": "tasks/prd-projector-product-requirements-document.md",
+    "updatedAt": "2026-02-20T23:29:26.801Z"
   }
 }

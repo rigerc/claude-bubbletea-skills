@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "sessionId": "ded7c3e6-f215-4a8f-a990-377065b6dd71",
-  "status": "failed",
-  "startedAt": "2026-02-20T22:36:39.847Z",
-  "updatedAt": "2026-02-20T22:38:02.151Z",
+  "sessionId": "e2cefdca-4ee3-412b-8c66-f3c47cc0b002",
+  "status": "running",
+  "startedAt": "2026-02-20T22:59:18.094Z",
+  "updatedAt": "2026-02-20T23:29:26.801Z",
   "currentIteration": 0,
   "maxIterations": 3,
   "tasksCompleted": 0,
@@ -67,6 +67,8 @@
   "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/mnt/d/dev/projects/bubbletea-v2-scaffold",
-  "activeTaskIds": [],
+  "activeTaskIds": [
+    "US-008"
+  ],
   "subagentPanelVisible": false
 }
