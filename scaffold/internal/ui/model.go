@@ -46,128 +46,15 @@ type Model struct {
 // New creates a new Model with the provided configuration.
 // It accepts config.Config as a value type (main.go passes *cfg dereferenced).
 func New(cfg config.Config) Model {
-	// Define sample content for detail screens.
-	detailContent := `This is a detail screen with scrollable content.
-
-Scroll controls:
-  • j / ↓        — line down
-  • k / ↑        — line up
-  • d / page down — half page down
-  • u / page up   — half page up
-  • g / home      — top
-  • G / end       — bottom
-  • mouse wheel   — scroll
-
-Press ESC to return to the menu.
-
-─────────────────────────────────────
-
-Section 1 — Lorem Ipsum
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
-tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
-quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo.
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore
-eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.
-
-─────────────────────────────────────
-
-Section 2 — More Filler
-
-Sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur
-pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis
-molestie pretium placerat, arcu ante tincidunt purus, vel bibendum nisi.
-
-Pellentesque habitant morbi tristique senectus et netus et malesuada fames
-ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget,
-tempor sit amet, ante. Donec eu libero sit amet quam egestas semper.
-
-─────────────────────────────────────
-
-Section 3 — Even More
-
-Aenean ultricies mi vitae est. Mauris placerat eleifend leo. Quisque sit
-amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum
-sed, commodo vitae, ornare sit amet, wisi. Aenean fermentum, elit eget
-tincidunt condimentum, eros ipsum rutrum orci.
-
-Nullam venenatis felis eu purus vestibulum, nec malesuada nisl iaculis.
-Fusce aliquet purus vel mauris pharetra, a condimentum lectus tincidunt.
-
-─────────────────────────────────────
-
-End of content.`
-
-	aboutContent := `scaffold
-
-A BubbleTea v2 skeleton application with:
-  • Stack-based navigation
-  • Adaptive light/dark theming
-  • List-based menu navigation
-  • Scrollable detail screens with capped height
-
-Built with:
-  • charm.land/bubbletea/v2
-  • charm.land/bubbles/v2
-  • charm.land/lipgloss/v2
-  • github.com/spf13/cobra
-  • github.com/knadh/koanf/v2
-  • github.com/rs/zerolog
-
-─────────────────────────────────────
-
-Architecture
-
-The application uses a stack-based navigator (internal/ui/nav). Each screen
-implements the nav.Screen interface (Init / Update / View). The root model
-holds the stack and fans messages out to the active screen.
-
-Theme detection uses tea.RequestBackgroundColor, which fires a
-tea.BackgroundColorMsg carrying the terminal's actual background colour.
-Screens implement nav.Themeable to receive isDark updates.
-
-Config is loaded via koanf: defaults → config file → env vars → flags.
-Logging uses zerolog with a file sink so it doesn't interfere with the TUI.
-
-─────────────────────────────────────
-
-Press ESC to return to the menu.`
-
-	// Create menu items using Huh-based menu.
-	menuOptions := []screens.HuhMenuOption{
-		{
-			Title:       "Details",
-			Description: "View a detail screen",
-			Action:      nav.Push(screens.NewDetailScreen("Details", detailContent, false, cfg.App.Name)),
-		},
-		{
-			Title:       "Browse Files",
-			Description: "Browse the filesystem",
-			Action:      nav.Push(screens.NewHuhFilePickerScreen(".", false, cfg.App.Name)),
-		},
-		{
-			Title:       "Settings",
-			Description: "Configure application",
-			Action:      nav.Push(screens.NewSettingsScreen(false, cfg.App.Name)),
-		},
-		{
-			Title:       "Banner Demo",
-			Description: "Showcase ASCII fonts and gradients",
-			Action:      nav.Push(screens.NewBannerDemoScreen(false, cfg.App.Name)),
-		},
-		{
-			Title:       "About",
-			Description: "About this application",
-			Action:      nav.Push(screens.NewDetailScreen("About", aboutContent, false, cfg.App.Name)),
-		},
-	}
-
-	root := screens.NewHuhMenuScreen(menuOptions, false, cfg.App.Name)
+	root := screens.NewHuhMenuScreen(
+		buildMenuOptions(cfg.App.Name),
+		false, // isDark — refined once BackgroundColorMsg arrives
+		cfg.App.Name,
+	)
 
 	return Model{
 		screens:      []nav.Screen{root},
-		th:           theme.New(false), // refined once BackgroundColorMsg arrives
+		th:           theme.New(false),
 		altScreen:    cfg.UI.AltScreen,
 		mouseEnabled: cfg.UI.MouseEnabled,
 		windowTitle:  cfg.App.Title,
@@ -264,7 +151,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case screens.SettingsAppliedMsg:
-		// Settings were applied - log them and optionally update app config
 		applogger.Debug().Msgf("Settings applied: %+v", msg.Data)
 		// Pop the settings screen after successful submission
 		if len(m.screens) > 1 {
@@ -311,9 +197,9 @@ func (m Model) View() tea.View {
 	}
 
 	v := tea.NewView(rendered)
-	v.AltScreen = m.altScreen    // from cfg.UI.AltScreen
-	v.WindowTitle = m.windowTitle // from cfg.App.Title
-	if m.mouseEnabled {           // from cfg.UI.MouseEnabled
+	v.AltScreen = m.altScreen
+	v.WindowTitle = m.windowTitle
+	if m.mouseEnabled {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	return v
@@ -331,3 +217,139 @@ func Run(m Model) error {
 	applogger.Info().Msg("Program exited successfully")
 	return nil
 }
+
+// ---------------------------------------------------------------------------
+// Demo content — replace with your own screens and menu entries.
+// ---------------------------------------------------------------------------
+
+// buildMenuOptions returns the root menu entries.
+// Add, remove, or reorder entries here to customise the main menu.
+func buildMenuOptions(appName string) []screens.HuhMenuOption {
+	return []screens.HuhMenuOption{
+		{
+			Title:       "Details",
+			Description: "View a scrollable detail screen",
+			Action:      nav.Push(screens.NewDetailScreen("Details", demoDetailContent, false, appName)),
+		},
+		{
+			Title:       "Browse Files",
+			Description: "Browse the filesystem",
+			Action:      nav.Push(screens.NewHuhFilePickerScreen(".", false, appName)),
+		},
+		{
+			Title:       "Settings",
+			Description: "Configure application settings",
+			Action:      nav.Push(screens.NewSettingsScreen(false, appName)),
+		},
+		{
+			Title:       "Banner Demo",
+			Description: "Showcase ASCII fonts and gradients",
+			Action:      nav.Push(screens.NewBannerDemoScreen(false, appName)),
+		},
+		{
+			Title:       "About",
+			Description: "About this application",
+			Action:      nav.Push(screens.NewDetailScreen("About", demoAboutContent, false, appName)),
+		},
+	}
+}
+
+// demoDetailContent is sample scrollable text shown in the Details screen.
+const demoDetailContent = `This is a detail screen with scrollable content.
+
+Scroll controls:
+  • j / ↓         — line down
+  • k / ↑         — line up
+  • d / page down  — half page down
+  • u / page up    — half page up
+  • g / home       — top
+  • G / end        — bottom
+  • mouse wheel    — scroll
+
+Press ESC to return to the menu.
+
+─────────────────────────────────────
+
+Section 1 — Lorem Ipsum
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
+quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore
+eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.
+
+─────────────────────────────────────
+
+Section 2 — More Filler
+
+Sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur
+pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis
+molestie pretium placerat, arcu ante tincidunt purus, vel bibendum nisi.
+
+Pellentesque habitant morbi tristique senectus et netus et malesuada fames
+ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget,
+tempor sit amet, ante. Donec eu libero sit amet quam egestas semper.
+
+─────────────────────────────────────
+
+Section 3 — Even More
+
+Aenean ultricies mi vitae est. Mauris placerat eleifend leo. Quisque sit
+amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum
+sed, commodo vitae, ornare sit amet, wisi. Aenean fermentum, elit eget
+tincidunt condimentum, eros ipsum rutrum orci.
+
+Nullam venenatis felis eu purus vestibulum, nec malesuada nisl iaculis.
+Fusce aliquet purus vel mauris pharetra, a condimentum lectus tincidunt.
+
+─────────────────────────────────────
+
+End of content.`
+
+// demoAboutContent is sample text shown in the About screen.
+const demoAboutContent = `scaffold
+
+A BubbleTea v2 skeleton application with:
+  • Stack-based navigation
+  • Adaptive light/dark theming
+  • Huh-based menu navigation
+  • Scrollable detail screens
+
+Built with:
+  • charm.land/bubbletea/v2
+  • charm.land/bubbles/v2
+  • charm.land/lipgloss/v2
+  • charm.land/huh/v2
+  • github.com/spf13/cobra
+  • github.com/knadh/koanf/v2
+  • github.com/rs/zerolog
+
+─────────────────────────────────────
+
+Architecture
+
+The application uses a stack-based navigator (internal/ui/nav). Each screen
+implements the nav.Screen interface (Init / Update / View). The root model
+holds the stack and fans messages out to the active screen.
+
+Screens embed ScreenBase and build their views with the layout.Column builder:
+
+    func (s *MyScreen) View() string {
+        return s.Layout().
+            Header(s.HeaderView()).
+            Body(myContent).
+            Help(s.RenderHelp(s.Keys)).
+            Render()
+    }
+
+Theme detection uses tea.RequestBackgroundColor, which fires a
+tea.BackgroundColorMsg carrying the terminal's actual background colour.
+Screens implement nav.Themeable to receive isDark updates.
+
+Config is loaded via koanf: defaults → config file → env vars → flags.
+Logging uses zerolog with a file sink so it doesn't interfere with the TUI.
+
+─────────────────────────────────────
+
+Press ESC to return to the menu.`

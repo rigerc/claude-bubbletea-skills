@@ -7,13 +7,15 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 
 	appkeys "scaffold/internal/ui/keys"
+	"scaffold/internal/ui/layout"
 	"scaffold/internal/ui/theme"
 )
 
 // Sizing constants for consistent view dimensions across all screens.
 const (
 	// MaxContentHeight is the maximum height for any screen's main content area.
-	// Views will be capped at this height or 1/3 of terminal height, whichever is smaller.
+	// Pass this to Column.BodyMaxHeight() on screens that should not grow
+	// beyond a fixed size (e.g. detail / viewport screens on large terminals).
 	MaxContentHeight = 25
 
 	// MinContentHeight is the minimum height for any screen's main content area.
@@ -50,7 +52,33 @@ func (b *ScreenBase) ApplyTheme(isDark bool) {
 	b.Help.Styles = help.DefaultStyles(isDark)
 }
 
-// ContentWidth returns the inner width after the App container's horizontal frame.
+// Layout returns a Column pre-configured with the screen's current dimensions
+// and the theme's App container style. This is the primary way screens should
+// build their view:
+//
+//	func (s *MyScreen) View() string {
+//	    return s.Layout().
+//	        Header(s.HeaderView()).
+//	        Body(myContent).
+//	        Help(s.RenderHelp(myKeys)).
+//	        Render()
+//	}
+//
+// To calculate body height for sizing viewports or forms during Update():
+//
+//	bodyH := s.Layout().
+//	    Header(s.HeaderView()).
+//	    Footer(s.footerView()).
+//	    Help(s.RenderHelp(myKeys)).
+//	    BodyHeight()
+func (b *ScreenBase) Layout() *layout.Column {
+	return layout.NewColumn(b.Width, b.Height).
+		Container(b.Theme.App)
+}
+
+// ContentWidth returns the inner width after the App container's horizontal
+// frame (margin + padding). Use this when sizing child components (viewports,
+// gutters, decorators) that must fit inside the App container.
 func (b *ScreenBase) ContentWidth() int {
 	frameH, _ := b.Theme.App.GetFrameSize()
 	return b.Width - frameH
@@ -78,39 +106,4 @@ func (b *ScreenBase) HeaderView() string {
 // RenderHelp renders the help bar from any help.KeyMap, with a top margin.
 func (b *ScreenBase) RenderHelp(km help.KeyMap) string {
 	return lipgloss.NewStyle().MarginTop(1).Render(b.Help.View(km))
-}
-
-// CalculateContentHeight returns the appropriate content height based on:
-// 1. Available space after subtracting header and help heights
-// 2. MaxContentHeight constant (or 1/3 of terminal height, whichever is smaller)
-// 3. MinContentHeight minimum
-//
-// The headerHeight and helpHeight parameters should be calculated using
-// lipgloss.Height() on the actual rendered header and help views.
-func (b *ScreenBase) CalculateContentHeight(headerHeight, helpHeight int) int {
-	if !b.IsSized() {
-		return MinContentHeight
-	}
-
-	_, frameV := b.Theme.App.GetFrameSize()
-	availableH := b.Height - frameV - headerHeight - helpHeight
-
-	// Cap at MaxContentHeight or 1/3 of terminal height, whichever is smaller
-	maxH := MaxContentHeight
-	if thirdHeight := b.Height / 3; thirdHeight < maxH {
-		maxH = thirdHeight
-	}
-
-	// Use the smaller of available space or max height
-	contentH := availableH
-	if contentH > maxH {
-		contentH = maxH
-	}
-
-	// Enforce minimum
-	if contentH < MinContentHeight {
-		contentH = MinContentHeight
-	}
-
-	return contentH
 }

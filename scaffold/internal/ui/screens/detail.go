@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	lipgloss "charm.land/lipgloss/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 
 	appkeys "scaffold/internal/ui/keys"
 	"scaffold/internal/ui/nav"
@@ -88,20 +88,20 @@ func (s *DetailScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 	return s, cmd
 }
 
-// View renders the detail screen: pager-style header, scrollable viewport, footer.
+// View renders the detail screen using the 1-column layout:
+// header → viewport body → scroll footer → help bar.
 func (s *DetailScreen) View() string {
 	if !s.ready {
 		return "Loading..."
 	}
 	helpKeys := detailHelpKeys{vp: s.vp.KeyMap, app: s.Keys}
-	return s.Theme.App.Render(
-		lipgloss.JoinVertical(lipgloss.Left,
-			s.HeaderView(),
-			s.vp.View(),
-			s.footerView(),
-			s.RenderHelp(helpKeys),
-		),
-	)
+	return s.Layout().
+		BodyMaxHeight(MaxContentHeight).
+		Header(s.HeaderView()).
+		Body(s.vp.View()).
+		Footer(s.footerView()).
+		Help(s.RenderHelp(helpKeys)).
+		Render()
 }
 
 // SetTheme updates the screen's theme based on the terminal background.
@@ -145,19 +145,22 @@ func (s *DetailScreen) applyGutter() {
 	}
 }
 
-// updateViewportSize recalculates viewport dimensions from the window size,
-// theme frame, header height, and footer height.
+// updateViewportSize recalculates viewport dimensions using the layout builder.
+// The layout measures all fixed sections and returns the remaining body height.
 func (s *DetailScreen) updateViewportSize() {
 	if !s.IsSized() {
 		return
 	}
 	s.Help.SetWidth(s.ContentWidth())
-	headerH := lipgloss.Height(s.HeaderView())
-	footerH := lipgloss.Height(s.footerView())
-	helpH := lipgloss.Height(s.RenderHelp(detailHelpKeys{vp: s.vp.KeyMap, app: s.Keys}))
+	helpKeys := detailHelpKeys{vp: s.vp.KeyMap, app: s.Keys}
 
-	// Calculate content height using shared helper
-	vpH := s.CalculateContentHeight(headerH+footerH, helpH)
+	bodyH := s.Layout().
+		BodyMaxHeight(MaxContentHeight).
+		Header(s.HeaderView()).
+		Footer(s.footerView()).
+		Help(s.RenderHelp(helpKeys)).
+		BodyHeight()
+
 	s.vp.SetWidth(s.ContentWidth())
-	s.vp.SetHeight(vpH)
+	s.vp.SetHeight(bodyH)
 }
