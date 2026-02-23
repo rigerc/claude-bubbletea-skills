@@ -1,0 +1,12 @@
+[
+  {
+    "id": "1",
+    "title": "Create a hello.txt file",
+    "description": "Contents: One sentence of whatever you want",
+    "priority": 1,
+    "status": "completed",
+    "retryCount": 0,
+    "maxRetries": 0,
+    "validationCommand": ""
+  }
+]

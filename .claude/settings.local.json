@@ -12,7 +12,10 @@
       "Bash(go mod download:*)",
       "Bash(timeout 2 go run:*)",
       "Bash(grep:*)",
-      "Bash(go doc:*)"
+      "Bash(go doc:*)",
+      "Bash(find:*)",
+      "Bash(cd /mnt/d/dev/projects/bubbletea-v2-scaffold/ralphio && go vet ./... 2>&1)",
+      "Bash(go vet:*)"
     ]
   }
 }
