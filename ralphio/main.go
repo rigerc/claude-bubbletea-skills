@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -15,6 +16,7 @@ import (
 	"ralphio/internal/adapter"
 	applogger "ralphio/internal/logger"
 	"ralphio/internal/orchestrator"
+	"ralphio/internal/state"
 	"ralphio/internal/ui"
 )
 
@@ -31,6 +33,31 @@ func main() {
 	}
 
 	cfg := loadConfig()
+
+	// Handle --reset-state: wipe the .ralph/ directory for a fresh start.
+	if cmd.GetResetState() {
+		ralphDir := filepath.Join(cfg.Ralph.ProjectDir, ".ralph")
+		if err := os.RemoveAll(ralphDir); err != nil {
+			fmt.Fprintf(os.Stderr, "fatal: clearing state directory: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	// Apply --mode when explicitly passed, overriding whatever is persisted
+	// in state.json. We write a fresh state so the orchestrator picks it up.
+	if cmd.WasLoopModeSet() {
+		initialMode := cmd.GetLoopMode()
+		st, err := state.Load(cfg.Ralph.ProjectDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fatal: loading state: %v\n", err)
+			os.Exit(1)
+		}
+		st.LoopMode = initialMode
+		if err := state.Save(cfg.Ralph.ProjectDir, st); err != nil {
+			fmt.Fprintf(os.Stderr, "fatal: saving initial state: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	// In TUI mode the terminal is occupied, so all logging must go to a file
 	// (debug mode) or be silenced entirely (normal mode).
@@ -141,6 +168,8 @@ func loadConfig() *config.Config {
 	if cmd.WasModelSet() {
 		cfg.Ralph.AgentModel = cmd.GetModel()
 	}
+	// --mode and --reset-state are handled in main() directly before the
+	// orchestrator is started; they do not map onto config fields.
 
 	return cfg
 }

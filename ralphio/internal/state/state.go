@@ -20,6 +20,9 @@ const (
 	StatusPaused  = "paused"
 	StatusStopped = "stopped"
 	StatusError   = "error"
+
+	ModePlanning = "planning"
+	ModeBuilding = "building"
 )
 
 // State holds the persistent execution state of the ralphio loop.
@@ -27,6 +30,7 @@ type State struct {
 	CurrentIteration int       `json:"currentIteration"`
 	CurrentTaskID    string    `json:"currentTaskId"`
 	LoopStatus       string    `json:"loopStatus"`
+	LoopMode         string    `json:"loopMode"` // "planning" or "building"
 	ActiveAdapter    string    `json:"activeAdapter"`
 	ActiveModel      string    `json:"activeModel"`
 	LastUpdated      time.Time `json:"lastUpdated"`
@@ -35,6 +39,7 @@ type State struct {
 func defaultState() *State {
 	return &State{
 		LoopStatus:    StatusStopped,
+		LoopMode:      ModeBuilding,
 		ActiveAdapter: "claude",
 	}
 }

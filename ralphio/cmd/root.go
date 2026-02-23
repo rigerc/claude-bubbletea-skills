@@ -25,6 +25,12 @@ var (
 	// model is the model for adapters that support model selection.
 	model string
 
+	// loopMode is the initial loop mode (planning or building).
+	loopMode string
+
+	// resetState clears the .ralph/ state directory on startup.
+	resetState bool
+
 	// runUI indicates whether to run the TUI after command execution.
 	// This is set to false when running subcommands like version or completion.
 	runUI = true
@@ -115,6 +121,14 @@ func init() {
 	// Model flag
 	rootCmd.PersistentFlags().StringVar(&model, "model", "",
 		"Model for adapters that support it (opencode, kilo, pi)")
+
+	// Loop mode flag
+	rootCmd.PersistentFlags().StringVar(&loopMode, "mode", "building",
+		"Initial loop mode: planning or building")
+
+	// Reset state flag
+	rootCmd.PersistentFlags().BoolVar(&resetState, "reset-state", false,
+		"Clear .ralph/ state directory for a fresh start")
 }
 
 // GetConfigFile returns the path to the configuration file.
@@ -162,3 +176,12 @@ func GetModel() string {
 func WasModelSet() bool {
 	return rootCmd.PersistentFlags().Changed("model")
 }
+
+// GetLoopMode returns the initial loop mode flag value.
+func GetLoopMode() string { return loopMode }
+
+// WasLoopModeSet reports whether --mode was explicitly passed on the command line.
+func WasLoopModeSet() bool { return rootCmd.PersistentFlags().Changed("mode") }
+
+// GetResetState returns the reset-state flag value.
+func GetResetState() bool { return resetState }

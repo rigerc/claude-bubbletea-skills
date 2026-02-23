@@ -4,12 +4,15 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 
 	tea "charm.land/bubbletea/v2"
 
 	"ralphio/config"
 	applogger "ralphio/internal/logger"
 	"ralphio/internal/orchestrator"
+	"ralphio/internal/plan"
 	"ralphio/internal/ui/nav"
 	"ralphio/internal/ui/screens"
 )
@@ -33,6 +36,12 @@ type Model struct {
 	mouseEnabled bool
 	windowTitle  string
 
+	// projectDir is the project directory, used for EditPlan and file status.
+	projectDir string
+
+	// loopMode tracks the current orchestrator loop mode for toggle logic.
+	loopMode plan.LoopMode
+
 	// Orchestrator communication channels. Both may be nil when running without
 	// an orchestrator (e.g. during unit tests or non-run subcommands).
 	orchMsgCh <-chan tea.Msg
@@ -45,13 +54,15 @@ type Model struct {
 // New creates a new Model with the provided configuration.
 // It accepts config.Config as a value type (main.go passes *cfg dereferenced).
 func New(cfg config.Config) Model {
-	root := screens.NewDashboardScreen(false, cfg.App.Name)
+	root := screens.NewDashboardScreen(false, cfg.App.Name, cfg.Ralph.ProjectDir)
 
 	return Model{
 		screens:      []nav.Screen{root},
 		altScreen:    cfg.UI.AltScreen,
 		mouseEnabled: cfg.UI.MouseEnabled,
 		windowTitle:  cfg.App.Title,
+		projectDir:   cfg.Ralph.ProjectDir,
+		loopMode:     plan.ModeBuilding,
 	}
 }
 
@@ -158,8 +169,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// --- Orchestrator messages ---
 
-	case orchestrator.LoopStateMsg,
-		orchestrator.AgentOutputMsg,
+	case orchestrator.LoopStateMsg:
+		// Keep local mode in sync so toggle logic is accurate.
+		m.loopMode = msg.LoopMode
+		// Re-subscribe so the next orchestrator message is delivered.
+		if m.orchMsgCh != nil {
+			cmds = append(cmds, m.listenOrchestrator())
+		}
+		// fall through to delegate to active screen
+
+	case orchestrator.AgentOutputMsg,
 		orchestrator.IterationStartMsg,
 		orchestrator.LoopDoneMsg,
 		orchestrator.LoopErrorMsg,
@@ -168,10 +187,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Re-subscribe so the next orchestrator message is delivered.
 		if m.orchMsgCh != nil {
 			cmds = append(cmds, m.listenOrchestrator())
-		}
-		// Accumulate history for the history screen.
-		if ic, ok := msg.(orchestrator.IterationCompleteMsg); ok {
-			m.history = append(m.history, ic)
 		}
 		// fall through to delegate to active screen
 
@@ -194,6 +209,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case screens.PauseUserMsg:
 		m.sendOrch(orchestrator.TogglePauseCmd{})
+		return m, nil
+
+	case screens.ToggleModeUserMsg:
+		newMode := plan.ModeBuilding
+		if m.loopMode == plan.ModeBuilding {
+			newMode = plan.ModePlanning
+		}
+		m.loopMode = newMode
+		m.sendOrch(orchestrator.ChangeModeCmd{Mode: newMode})
+		return m, nil
+
+	case screens.EditPlanUserMsg:
+		tasksFile := m.projectDir + "/tasks.json"
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+		editorCmd := exec.Command(editor, tasksFile)
+		return m, tea.ExecProcess(editorCmd, func(err error) tea.Msg {
+			if err != nil {
+				applogger.Error().Err(err).Msg("editor exited with error")
+			}
+			return nil
+		})
+
+	case screens.RegenPlanUserMsg:
+		m.loopMode = plan.ModePlanning
+		m.sendOrch(orchestrator.ChangeModeCmd{Mode: plan.ModePlanning})
 		return m, nil
 
 	case screens.AdapterChangedMsg:

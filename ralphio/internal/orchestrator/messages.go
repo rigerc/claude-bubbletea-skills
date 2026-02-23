@@ -8,7 +8,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"ralphio/internal/adapter"
 	"ralphio/internal/plan"
-	"ralphio/internal/validator"
 )
 
 // --- Messages sent from orchestrator → TUI ---
@@ -22,6 +21,7 @@ type LoopStateMsg struct {
 	CurrentTask    *plan.Task  // nil if idle
 	Tasks          []plan.Task // full task list (copy)
 	Status         string      // "running", "paused", "stopped", "error"
+	LoopMode       plan.LoopMode
 	ActiveAgent    adapter.AgentType
 	ActiveModel    string
 }
@@ -32,7 +32,9 @@ type AgentOutputMsg struct {
 	Text string
 }
 
-// IterationStartMsg fires when the orchestrator begins processing a task.
+// IterationStartMsg fires when the orchestrator begins an agent invocation.
+// In the agent-driven model, TaskID and TaskTitle are empty — the agent
+// selects the task autonomously.
 type IterationStartMsg struct {
 	Iteration int
 	TaskID    string
@@ -40,12 +42,13 @@ type IterationStartMsg struct {
 }
 
 // IterationCompleteMsg fires when an iteration finishes (pass or fail).
+// Passed is determined by output signal detection, not an explicit validation
+// command run by the orchestrator.
 type IterationCompleteMsg struct {
-	Iteration        int
-	TaskID           string
-	ValidationResult *validator.Result // nil when no validation command was set
-	Passed           bool
-	Duration         time.Duration
+	Iteration int
+	TaskID    string
+	Passed    bool
+	Duration  time.Duration
 }
 
 // LoopDoneMsg fires when all tasks are complete or the loop exits cleanly with
@@ -66,12 +69,12 @@ type LoopResumedMsg struct{}
 
 // --- Commands sent from TUI → orchestrator ---
 
-// RetryCmd asks the orchestrator to retry the current task immediately,
-// resetting its retry counter.
+// RetryCmd is kept for backward compatibility. The orchestrator no longer
+// handles per-task retries; the agent manages its own retry strategy.
 type RetryCmd struct{}
 
-// SkipCmd asks the orchestrator to mark the current task as skipped and move
-// on to the next pending task.
+// SkipCmd is kept for backward compatibility. The orchestrator no longer
+// handles per-task skips; use ChangeModeCmd or StopCmd instead.
 type SkipCmd struct{}
 
 // TogglePauseCmd pauses the loop if it is running, or resumes it if paused.
@@ -82,6 +85,12 @@ type TogglePauseCmd struct{}
 type ChangeAdapterCmd struct {
 	Agent adapter.AgentType
 	Model string
+}
+
+// ChangeModeCmd asks the orchestrator to switch between planning and building
+// modes. The change takes effect on the next iteration.
+type ChangeModeCmd struct {
+	Mode plan.LoopMode
 }
 
 // StopCmd asks the orchestrator to stop the loop cleanly. The caller is

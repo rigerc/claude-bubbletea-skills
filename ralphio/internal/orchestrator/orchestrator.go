@@ -3,13 +3,14 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"ralphio/internal/adapter"
 	"ralphio/internal/plan"
+	"ralphio/internal/prompt"
 	"ralphio/internal/state"
-	"ralphio/internal/validator"
 )
 
 const iterationDelay = 2000 * time.Millisecond
@@ -18,25 +19,26 @@ const iterationDelay = 2000 * time.Millisecond
 // with the BubbleTea TUI exclusively via typed messages over channels: outbound
 // messages go on msgCh, inbound commands arrive on cmdCh.
 //
-// All mutable state (paused, skipCurrent, retryCurrent, currentAdapter) is
-// accessed only from the goroutine that calls Run — no mutex is required.
+// In the agent-driven model, the orchestrator no longer selects tasks or runs
+// validation. Instead, it builds a mode-based prompt from PROMPT_build.md or
+// PROMPT_plan.md and passes it to the agent. The agent reads tasks.json,
+// selects the highest-priority pending task, implements it, and updates
+// tasks.json directly.
 type Orchestrator struct {
-	projectDir     string
-	msgCh          chan<- tea.Msg
-	cmdCh          <-chan any
+	projectDir    string
+	msgCh         chan<- tea.Msg
+	cmdCh         <-chan any
 	currentAdapter adapter.Adapter
+	promptBuilder *prompt.Builder
 
-	// iteration-scoped flags; reset at the start of each iteration.
-	paused       bool
-	skipCurrent  bool
-	retryCurrent bool
+	paused bool
 }
 
 // New returns an Orchestrator ready to be started with Run.
 //
-// msgCh should be a buffered channel (capacity ≥ 64) so that sends from the
+// msgCh should be a buffered channel (capacity >= 64) so that sends from the
 // orchestrator goroutine do not block when the TUI is briefly busy.
-// cmdCh carries commands from the TUI (RetryCmd, SkipCmd, etc.).
+// cmdCh carries commands from the TUI (TogglePauseCmd, ChangeAdapterCmd, etc.).
 func New(
 	projectDir string,
 	initialAdapter adapter.Adapter,
@@ -44,18 +46,17 @@ func New(
 	cmdCh <-chan any,
 ) *Orchestrator {
 	return &Orchestrator{
-		projectDir:     projectDir,
-		msgCh:          msgCh,
-		cmdCh:          cmdCh,
+		projectDir:    projectDir,
+		msgCh:         msgCh,
+		cmdCh:         cmdCh,
 		currentAdapter: initialAdapter,
+		promptBuilder: prompt.New(projectDir),
 	}
 }
 
 // Run starts the Ralph loop. It blocks until ctx is cancelled or all tasks are
 // complete. Run is intended to be called in a dedicated goroutine.
 func (o *Orchestrator) Run(ctx context.Context) {
-	// Load initial state and tasks so the TUI has something to display
-	// immediately on startup.
 	st, err := state.Load(o.projectDir)
 	if err != nil {
 		o.send(LoopErrorMsg{Err: fmt.Errorf("loading state: %w", err)})
@@ -63,16 +64,19 @@ func (o *Orchestrator) Run(ctx context.Context) {
 	}
 	st.LoopStatus = state.StatusRunning
 	st.ActiveAdapter = string(o.currentAdapter.Name())
+	if st.LoopMode == "" {
+		st.LoopMode = state.ModeBuilding
+	}
 
-	tasks, err := o.loadTasks()
+	planMgr := plan.NewManager(o.projectDir)
+
+	tasks, err := planMgr.LoadTasks()
 	if err != nil {
-		o.send(LoopErrorMsg{Err: err})
+		o.send(LoopErrorMsg{Err: fmt.Errorf("loading tasks: %w", err)})
 		return
 	}
 
 	o.send(o.snapshot(tasks, st))
-
-	planMgr := plan.NewManager(o.projectDir)
 
 	for {
 		// Drain any pending TUI commands before deciding what to do next.
@@ -93,27 +97,27 @@ func (o *Orchestrator) Run(ctx context.Context) {
 			continue
 		}
 
-		// Reload tasks from disk so any external edits are picked up.
+		// Reload tasks so external edits and agent changes are picked up.
 		tasks, err = planMgr.LoadTasks()
 		if err != nil {
 			o.send(LoopErrorMsg{Err: fmt.Errorf("loading tasks: %w", err)})
 			return
 		}
 
-		next := plan.NextTask(tasks)
-		if next == nil {
+		// Check if all tasks are complete — agent may have finished.
+		if allCompleted(tasks) {
 			o.send(LoopDoneMsg{})
 			return
 		}
 
-		if err := o.runIteration(ctx, st, planMgr, tasks, next); err != nil {
+		if err := o.runIteration(ctx, st, tasks); err != nil {
 			// A non-nil error from runIteration means the context was cancelled
 			// or a fatal I/O error occurred — either way, stop the loop.
 			o.shutdown(tasks, st)
 			return
 		}
 
-		// Reload tasks after the iteration (runIteration may have saved them).
+		// Reload after agent may have mutated tasks.json.
 		tasks, err = planMgr.LoadTasks()
 		if err != nil {
 			o.send(LoopErrorMsg{Err: fmt.Errorf("reloading tasks after iteration: %w", err)})
@@ -132,101 +136,58 @@ func (o *Orchestrator) Run(ctx context.Context) {
 	}
 }
 
-// runIteration executes a single task: mark in_progress, run the agent,
-// validate, update the task status, and persist everything. Returns a non-nil
-// error only on unrecoverable failures (context cancellation or disk I/O).
+// runIteration executes a single agent invocation: builds the mode-based
+// prompt, runs the agent, and streams output to the TUI. The agent is
+// responsible for selecting tasks, updating tasks.json, and running validation.
 func (o *Orchestrator) runIteration(
 	ctx context.Context,
 	st *state.State,
-	planMgr *plan.Manager,
 	tasks []plan.Task,
-	task *plan.Task,
 ) error {
 	st.CurrentIteration++
-	st.CurrentTaskID = task.ID
 	st.ActiveAdapter = string(o.currentAdapter.Name())
 
-	// Mark task as in-progress.
-	plan.UpdateTask(tasks, task.ID, plan.StatusInProgress, task.RetryCount)
-	if err := planMgr.SaveTasks(tasks); err != nil {
-		o.send(LoopErrorMsg{Err: fmt.Errorf("saving tasks (in_progress): %w", err)})
-		return err
+	// Build prompt from the mode-based prompt file; fall back to an inline
+	// prompt if the file is missing so the loop can still make progress.
+	mode := plan.LoopMode(st.LoopMode)
+	agentPrompt, err := o.promptBuilder.Build(mode)
+	if err != nil {
+		agentPrompt = fallbackPrompt(mode)
 	}
 
 	o.send(IterationStartMsg{
 		Iteration: st.CurrentIteration,
-		TaskID:    task.ID,
-		TaskTitle: task.Title,
+		// TaskID and TaskTitle are intentionally empty: the agent selects
+		// the task autonomously by reading tasks.json.
 	})
 	o.send(o.snapshot(tasks, st))
 
 	start := time.Now()
+	var outputBuf strings.Builder
 
-	prompt := fmt.Sprintf(
-		"Task ID: %s\nTitle: %s\n\nDescription:\n%s\n\nValidation command: %s",
-		task.ID,
-		task.Title,
-		task.Description,
-		task.ValidationCommand,
-	)
-
-	// Execute agent with streaming output forwarded to the TUI.
-	execErr := o.currentAdapter.Execute(ctx, prompt, func(text string) {
+	execErr := o.currentAdapter.Execute(ctx, agentPrompt, func(text string) {
+		outputBuf.WriteString(text)
 		o.send(AgentOutputMsg{Text: text})
 	})
 
-	// Handle context cancellation from within Execute.
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	// Run validation if a command is configured and the agent did not error.
-	var validResult *validator.Result
-	passed := execErr == nil
-
-	if passed && task.ValidationCommand != "" {
-		r := validator.Run(ctx, task.ValidationCommand)
-		validResult = &r
-		passed = r.Passed
-
-		// Check again for context cancellation after the validation run.
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-	}
-
 	duration := time.Since(start)
+	passed := execErr == nil && detectValidation(outputBuf.String())
 
-	// Update task status based on outcome.
-	maxRetries := task.MaxRetries
-	if maxRetries == 0 {
-		maxRetries = 3 // sensible default when not specified
-	}
-
-	switch {
-	case passed:
-		plan.UpdateTask(tasks, task.ID, plan.StatusCompleted, 0)
-	case task.RetryCount < maxRetries:
-		// Increment retry count and reset to pending so the next loop
-		// iteration picks it up again.
-		plan.UpdateTask(tasks, task.ID, plan.StatusPending, task.RetryCount+1)
-	default:
-		// Retry budget exhausted.
-		plan.UpdateTask(tasks, task.ID, plan.StatusSkipped, task.RetryCount)
+	// Update the current task ID from whatever the agent marked in_progress.
+	if inProgress := findInProgress(tasks); inProgress != nil {
+		st.CurrentTaskID = inProgress.ID
 	}
 
 	o.send(IterationCompleteMsg{
-		Iteration:        st.CurrentIteration,
-		TaskID:           task.ID,
-		ValidationResult: validResult,
-		Passed:           passed,
-		Duration:         duration,
+		Iteration: st.CurrentIteration,
+		TaskID:    st.CurrentTaskID,
+		Passed:    passed,
+		Duration:  duration,
 	})
-
-	if err := planMgr.SaveTasks(tasks); err != nil {
-		o.send(LoopErrorMsg{Err: fmt.Errorf("saving tasks (post-iteration): %w", err)})
-		return err
-	}
 
 	if err := state.Save(o.projectDir, st); err != nil {
 		o.send(LoopErrorMsg{Err: fmt.Errorf("saving state: %w", err)})
@@ -261,10 +222,6 @@ func (o *Orchestrator) drainCommands() {
 // state. It must only be called from the Run goroutine.
 func (o *Orchestrator) handleCommand(cmd any) {
 	switch c := cmd.(type) {
-	case RetryCmd:
-		o.retryCurrent = true
-	case SkipCmd:
-		o.skipCurrent = true
 	case TogglePauseCmd:
 		o.paused = !o.paused
 		if o.paused {
@@ -274,6 +231,10 @@ func (o *Orchestrator) handleCommand(cmd any) {
 		}
 	case ChangeAdapterCmd:
 		o.currentAdapter = adapter.NewAdapter(c.Agent, c.Model)
+	case ChangeModeCmd:
+		// Mode is persisted in state; update will be reflected at the next
+		// iteration when runIteration reads st.LoopMode.
+		o.send(LoopPausedMsg{}) // brief pause while mode switches
 	case StopCmd:
 		// StopCmd is a signal for the caller to cancel the context. The
 		// orchestrator itself does not exit here; it will exit on the next
@@ -323,18 +284,60 @@ func (o *Orchestrator) snapshot(tasks []plan.Task, st *state.State) LoopStateMsg
 		CurrentTask:    currentTask,
 		Tasks:          tasksCopy,
 		Status:         st.LoopStatus,
+		LoopMode:       plan.LoopMode(st.LoopMode),
 		ActiveAgent:    o.currentAdapter.Name(),
 		ActiveModel:    st.ActiveModel,
 	}
 }
 
-// loadTasks is a convenience wrapper used on first startup before the plan
-// manager is constructed.
-func (o *Orchestrator) loadTasks() ([]plan.Task, error) {
-	mgr := plan.NewManager(o.projectDir)
-	tasks, err := mgr.LoadTasks()
-	if err != nil {
-		return nil, fmt.Errorf("loading tasks: %w", err)
+// allCompleted returns true if every task in the list is completed.
+// An empty task list is never considered done.
+func allCompleted(tasks []plan.Task) bool {
+	if len(tasks) == 0 {
+		return false
 	}
-	return tasks, nil
+	for i := range tasks {
+		if tasks[i].Status != plan.StatusCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+// findInProgress returns the first in_progress task or nil.
+func findInProgress(tasks []plan.Task) *plan.Task {
+	for i := range tasks {
+		if tasks[i].Status == plan.StatusInProgress {
+			return &tasks[i]
+		}
+	}
+	return nil
+}
+
+// detectValidation scans agent output for pass/fail signals. Best-effort:
+// the agent is authoritative; this is a display hint for the TUI only.
+func detectValidation(output string) bool {
+	lower := strings.ToLower(output)
+	successPhrases := []string{
+		"tests passed",
+		"all tests pass",
+		"build successful",
+		"✓",
+		"ok  ",
+	}
+	for _, phrase := range successPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+// fallbackPrompt returns a minimal inline prompt when the prompt file is
+// missing, so the loop can still make progress without PROMPT_*.md files.
+func fallbackPrompt(mode plan.LoopMode) string {
+	if mode == plan.ModePlanning {
+		return "Study tasks.json and source code. Create or update tasks.json with prioritized tasks. Plan only, do not implement."
+	}
+	return "Study tasks.json. Select the highest-priority pending task, implement it, run tests, commit."
 }

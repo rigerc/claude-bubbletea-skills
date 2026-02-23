@@ -1,7 +1,7 @@
 [
   {
     "id": "1",
-    "title": "Create a hello.txt file",
+    "title": "Write hello.txt",
     "description": "Contents: One sentence of whatever you want",
     "priority": 1,
     "status": "completed",
