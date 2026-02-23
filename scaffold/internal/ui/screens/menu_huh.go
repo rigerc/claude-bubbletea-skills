@@ -106,7 +106,9 @@ func (s *HuhMenuScreen) View() string {
 
 	bannerH := lipgloss.Height(s.bannerCache)
 	formInternalHelpH := 4
-	maxFormH := s.CalculateContentHeight(bannerH, formInternalHelpH)
+	globalHelpView := s.RenderHelp(s.Keys)
+	globalHelpH := lipgloss.Height(globalHelpView)
+	maxFormH := s.CalculateContentHeight(bannerH, formInternalHelpH+globalHelpH)
 
 	formView := lipgloss.NewStyle().
 		Height(maxFormH).
@@ -117,6 +119,7 @@ func (s *HuhMenuScreen) View() string {
 		lipgloss.JoinVertical(lipgloss.Left,
 			s.bannerCache,
 			formView,
+			globalHelpView,
 		),
 	)
 }

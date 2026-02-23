@@ -67,6 +67,12 @@ type LoopPausedMsg struct{}
 // LoopResumedMsg fires when the loop resumes after being paused.
 type LoopResumedMsg struct{}
 
+// LoopModeChangedMsg fires when the orchestrator automatically switches modes.
+type LoopModeChangedMsg struct {
+	Mode   plan.LoopMode
+	Reason string
+}
+
 // --- Commands sent from TUI → orchestrator ---
 
 // RetryCmd is kept for backward compatibility. The orchestrator no longer
@@ -108,4 +114,5 @@ var (
 	_ tea.Msg = LoopErrorMsg{}
 	_ tea.Msg = LoopPausedMsg{}
 	_ tea.Msg = LoopResumedMsg{}
+	_ tea.Msg = LoopModeChangedMsg{}
 )

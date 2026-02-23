@@ -43,58 +43,50 @@ Ralphio operates in two modes, toggled with `m` or set via `--mode`.
 
 ### Planning mode
 
-The agent reads `specs/*` and existing source code, then creates or updates `tasks.json` with a prioritized list of tasks. It does **not** implement anything.
+The agent reads `PRD.md` (or `specs/*` as fallback) and existing source code, then creates or updates `tasks.json` with a prioritized list of tasks. It does **not** implement anything.
 
-Prompt file: `PROMPT_plan.md` in the project directory.
+Embedded prompt (override with `PROMPT_plan.md` for custom workflows).
 
 ### Building mode (default)
 
 The agent reads `tasks.json`, selects the highest-priority pending task, implements it, runs tests, commits, and updates `tasks.json`. Ralphio loops until all tasks are completed or the loop is stopped.
 
-Prompt file: `PROMPT_build.md` in the project directory.
-
 ## Project Structure
 
-Ralphio expects the following files in `--project-dir`:
+Ralphio uses the following files in `--project-dir`:
 
 ```
 my-project/
-├── PROMPT_build.md   # Build mode agent instructions
-├── PROMPT_plan.md    # Plan mode agent instructions
-├── AGENTS.md         # Build/test commands, project conventions
+├── AGENTS.md         # Build/test commands, project conventions (optional)
+├── PRD.md            # Product Requirements Document (optional)
+├── PROMPT_build.md   # Custom build mode prompt (optional, overrides embedded)
+├── PROMPT_plan.md    # Custom plan mode prompt (optional, overrides embedded)
 ├── tasks.json        # Agent-maintained task list
-└── specs/            # Requirement specifications (optional)
+└── specs/            # Requirement specifications (optional, fallback if no PRD.md)
     └── *.md
 ```
 
-The TUI dashboard shows which of these files are present with a `✓`/`✗` indicator.
+The TUI dashboard shows which of the key files (PRD.md, AGENTS.md, tasks.json) are present with a `✓`/`✗` indicator.
 
-### Default prompt files
+**Auto-creation:** If `tasks.json` doesn't exist on startup, ralphio creates one with a schema template example task and switches to planning mode so the agent can generate real tasks from `PRD.md`.
 
-If `PROMPT_build.md` or `PROMPT_plan.md` are missing, ralphio falls back to a minimal inline prompt. For best results, provide your own prompt files tailored to your project.
+### Embedded Prompts
 
-**Minimal `PROMPT_build.md`:**
+Ralphio includes embedded prompts for both modes, so `PROMPT_build.md` and `PROMPT_plan.md` are **optional**. If present, they override the embedded prompts.
 
-```markdown
-0a. Study `specs/*` with up to 500 parallel Sonnet subagents to learn the application specifications.
-0b. Study @tasks.json.
-0c. For reference, the application source code is in `src/*`.
+**Embedded planning prompt:**
+- Reads `PRD.md` (or `specs/*` as fallback)
+- Generates or updates `tasks.json` from requirements
+- Does NOT implement anything
 
-1. Follow @tasks.json and choose the highest-priority pending task. Set its status to
-   "in_progress" before starting. Search the codebase before assuming something is missing.
-2. After implementing, run the tests for that unit of code.
-3. When you discover issues, add them as new tasks in @tasks.json with appropriate priority.
-4. When tests pass, set the task status to "completed", then `git add -A && git commit`.
-```
+**Embedded building prompt:**
+- Studies `PRD.md` (if present) and `tasks.json`
+- Implements tasks autonomously
+- Runs tests, commits, and updates `tasks.json`
 
-**Minimal `PROMPT_plan.md`:**
+### Custom Prompts (Optional)
 
-```markdown
-Study @tasks.json and source code in `src/*` against `specs/*`. Create or update @tasks.json
-as a JSON array sorted by priority (1 = highest) of items yet to be implemented.
-
-IMPORTANT: Plan only. Do NOT implement anything.
-```
+For project-specific workflows, create `PROMPT_build.md` or `PROMPT_plan.md` in your project directory to override the embedded prompts.
 
 ## Task File Format (`tasks.json`)
 
@@ -269,14 +261,20 @@ Create `~/.ralphio.json` for persistent settings:
 ```bash
 mkdir my-feature && cd my-feature
 
-# Create specs
-echo "# Auth Service\nImplement JWT authentication." > specs/auth.md
+# Create a PRD (Product Requirements Document)
+cat > PRD.md << 'EOF'
+# Auth Service
 
-# Create prompt files (or use defaults)
-cp /path/to/ralphio/assets/PROMPT_plan.md .
-cp /path/to/ralphio/assets/PROMPT_build.md .
+Implement JWT authentication with login/logout endpoints.
 
-# 1. Generate plan
+## Requirements
+- JWT token generation and validation
+- Login endpoint with username/password
+- Logout endpoint that invalidates tokens
+- Middleware to protect authenticated routes
+EOF
+
+# 1. Generate plan from PRD
 ralphio --mode planning --agent claude
 
 # 2. Review tasks.json, then switch to building
@@ -305,8 +303,8 @@ Press `m` in the dashboard to switch between PLANNING and BUILDING modes without
 | Issue | Solution |
 |-------|----------|
 | Agent not found | Ensure the agent CLI is installed and in `PATH` |
-| `PROMPT_build.md ✗` | Create the file in `--project-dir`; ralphio uses a minimal fallback |
 | No output visible | Agent may not support streaming JSON output format |
 | Tasks not updating | Check file permissions on `tasks.json` |
 | State corruption | Run with `--reset-state` to clear `.ralph/` |
 | Want a fresh plan | Press `R` in dashboard or run with `--mode planning --reset-state` |
+| Custom prompts ignored | Ensure file is named exactly `PROMPT_plan.md` or `PROMPT_build.md` |

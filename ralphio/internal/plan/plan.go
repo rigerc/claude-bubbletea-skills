@@ -82,6 +82,24 @@ func (m *Manager) SaveTasks(tasks []Task) error {
 	return nil
 }
 
+// CreateInitialTasks creates a new tasks.json with a schema template.
+// This provides the agent with the correct structure to fill in.
+func (m *Manager) CreateInitialTasks() error {
+	initialTasks := []Task{
+		{
+			ID:          "task-1",
+			Title:       "Example task - replace with actual tasks",
+			Description: "Study PRD.md and generate real tasks from requirements",
+			Priority:    1,
+			Status:      StatusPending,
+			RetryCount:  0,
+			MaxRetries:  3,
+			ValidationCommand: "",
+		},
+	}
+	return m.SaveTasks(initialTasks)
+}
+
 // NextTask returns a pointer to the first pending task with the lowest
 // Priority number. Returns nil if no pending task exists.
 func NextTask(tasks []Task) *Task {

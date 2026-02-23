@@ -256,6 +256,10 @@ func (s *DashboardScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
 	case orchestrator.LoopResumedMsg:
 		s.turns = append(s.turns, OutputTurn{Kind: TurnSystem, Lines: []string{"Loop resumed"}})
 		s.rebuildViewport()
+
+	case orchestrator.LoopModeChangedMsg:
+		s.turns = append(s.turns, OutputTurn{Kind: TurnSystem, Lines: []string{msg.Reason}})
+		s.rebuildViewport()
 	}
 
 	var cmd tea.Cmd
@@ -374,8 +378,7 @@ func (s *DashboardScreen) renderFileStatus(width int) string {
 
 	base := s.projectDir
 	parts := []string{
-		fmt.Sprintf("PROMPT_build.md %s", check(filepath.Join(base, "PROMPT_build.md"))),
-		fmt.Sprintf("PROMPT_plan.md %s", check(filepath.Join(base, "PROMPT_plan.md"))),
+		fmt.Sprintf("PRD.md %s", check(filepath.Join(base, "PRD.md"))),
 		fmt.Sprintf("AGENTS.md %s", check(filepath.Join(base, "AGENTS.md"))),
 		fmt.Sprintf("tasks.json %s", check(filepath.Join(base, "tasks.json"))),
 	}

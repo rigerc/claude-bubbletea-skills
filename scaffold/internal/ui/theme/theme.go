@@ -10,8 +10,9 @@ type Theme struct {
 	Palette ThemePalette
 
 	// Container styles
-	App   lipgloss.Style // Outer container with margin
-	Panel lipgloss.Style // Bordered panel for grouped content
+	App       lipgloss.Style // Outer container with margin
+	AppBorder lipgloss.Style // Persistent outer border wrapping the entire TUI
+	Panel     lipgloss.Style // Bordered panel for grouped content
 
 	// Typography
 	Title  lipgloss.Style // Header/title bar with primary background
@@ -34,6 +35,9 @@ func New(isDark bool) Theme {
 
 		// Container styles
 		App: lipgloss.NewStyle().Margin(1, 2),
+		AppBorder: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(p.Primary),
 		Panel: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(p.Primary).

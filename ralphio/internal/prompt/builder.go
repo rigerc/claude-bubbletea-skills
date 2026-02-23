@@ -3,7 +3,6 @@
 package prompt
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -43,21 +42,28 @@ func (b *Builder) WithPlanFile(path string) *Builder {
 	return b
 }
 
-// Build returns the prompt text for the given mode. It reads the
-// appropriate PROMPT_*.md file from the project directory. Returns
-// an error if the file cannot be read.
+// Build returns the prompt text for the given mode. Prefers external
+// PROMPT_*.md files if present, otherwise falls back to embedded prompts.
 func (b *Builder) Build(mode plan.LoopMode) (string, error) {
-	path := b.buildFile
+	var path string
+	var embeddedPrompt string
+
 	if mode == plan.ModePlanning {
 		path = b.planFile
+		embeddedPrompt = PlanningPrompt
+	} else {
+		path = b.buildFile
+		embeddedPrompt = BuildingPrompt
 	}
 
+	// Try external file first (allows user customization)
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("reading prompt file %s: %w", path, err)
+	if err == nil {
+		return string(data), nil
 	}
 
-	return string(data), nil
+	// Fall back to embedded prompt
+	return embeddedPrompt, nil
 }
 
 // HasBuildPrompt reports whether PROMPT_build.md exists in the project directory.

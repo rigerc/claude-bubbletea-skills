@@ -11,18 +11,28 @@ import (
 	applogger "scaffold/internal/logger"
 	"scaffold/internal/ui/nav"
 	"scaffold/internal/ui/screens"
+	"scaffold/internal/ui/theme"
 )
+
+// borderOverhead is the number of columns/rows consumed by the persistent
+// outer border (1 char on each side → 2 per axis).
+const borderOverhead = 2
 
 // Model represents the application state with a navigation stack.
 type Model struct {
 	// screens holds the navigation stack. The last element is the active screen.
 	screens []nav.Screen
 
-	// width and height store the current terminal dimensions.
+	// width and height store the *inner* content dimensions (terminal size minus
+	// borderOverhead on each axis) so every screen sizes itself to fit inside the
+	// persistent outer border rendered by View.
 	width, height int
 
 	// isDark indicates if the terminal has a dark background.
 	isDark bool
+
+	// th is the current application theme, rebuilt whenever isDark changes.
+	th theme.Theme
 
 	// quitting is set to true when the app is about to exit.
 	quitting bool
@@ -157,6 +167,7 @@ Press ESC to return to the menu.`
 
 	return Model{
 		screens:      []nav.Screen{root},
+		th:           theme.New(false), // refined once BackgroundColorMsg arrives
 		altScreen:    cfg.UI.AltScreen,
 		mouseEnabled: cfg.UI.MouseEnabled,
 		windowTitle:  cfg.App.Title,
@@ -178,6 +189,16 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Shrink WindowSizeMsg by the border overhead so all screens (and the
+	// values stored in m.width / m.height) refer to the inner content area.
+	if wm, ok := msg.(tea.WindowSizeMsg); ok {
+		inner := tea.WindowSizeMsg{
+			Width:  max(0, wm.Width-borderOverhead),
+			Height: max(0, wm.Height-borderOverhead),
+		}
+		msg = inner
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {
@@ -193,6 +214,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
+		m.th = theme.New(m.isDark)
 		applogger.Debug().Msgf("Background color detected: isDark=%v", m.isDark)
 		// Propagate theme to ALL screens in stack
 		for i := range m.screens {
@@ -273,10 +295,25 @@ func (m Model) View() tea.View {
 		content = m.screens[len(m.screens)-1].View()
 	}
 
-	v := tea.NewView(content)
-	v.AltScreen = m.altScreen   // from cfg.UI.AltScreen
+	// Wrap every screen in a persistent rounded border whose color tracks the
+	// current theme. Width is set to the inner content width so that the border
+	// characters push the total rendered width back up to the terminal width.
+	// In alt-screen mode the border also fills the full terminal height.
+	var rendered string
+	if m.width > 0 {
+		bs := m.th.AppBorder.Width(m.width)
+		if m.altScreen && m.height > 0 {
+			bs = bs.Height(m.height)
+		}
+		rendered = bs.Render(content)
+	} else {
+		rendered = content
+	}
+
+	v := tea.NewView(rendered)
+	v.AltScreen = m.altScreen    // from cfg.UI.AltScreen
 	v.WindowTitle = m.windowTitle // from cfg.App.Title
-	if m.mouseEnabled {          // from cfg.UI.MouseEnabled
+	if m.mouseEnabled {           // from cfg.UI.MouseEnabled
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	return v

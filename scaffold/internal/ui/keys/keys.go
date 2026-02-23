@@ -7,7 +7,7 @@ import "charm.land/bubbles/v2/key"
 // It implements help.KeyMap so it can be passed directly to help.View().
 type GlobalKeyMap struct {
 	Back key.Binding // "esc"    — go to previous screen
-	Quit key.Binding // "ctrl+c" — always quit (no conflict with list filter "q")
+	Quit key.Binding // "ctrl+c", "q" — quit the application
 	Help key.Binding // "?"      — toggle help expansion
 }
 
@@ -19,8 +19,8 @@ func New() GlobalKeyMap {
 			key.WithHelp("esc", "back"),
 		),
 		Quit: key.NewBinding(
-			key.WithKeys("ctrl+c"),
-			key.WithHelp("ctrl+c", "quit"),
+			key.WithKeys("ctrl+c", "q"),
+			key.WithHelp("ctrl+c/q", "quit"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),

@@ -76,6 +76,22 @@ func (o *Orchestrator) Run(ctx context.Context) {
 		return
 	}
 
+	// Create tasks.json with schema template if it doesn't exist.
+	if len(tasks) == 0 {
+		if err := planMgr.CreateInitialTasks(); err != nil {
+			o.send(LoopErrorMsg{Err: fmt.Errorf("creating tasks.json: %w", err)})
+			return
+		}
+		// Reload tasks after creation to get the template.
+		tasks, err = planMgr.LoadTasks()
+		if err != nil {
+			o.send(LoopErrorMsg{Err: fmt.Errorf("loading tasks.json after creation: %w", err)})
+			return
+		}
+		o.send(LoopModeChangedMsg{Mode: state.ModePlanning, Reason: "Created tasks.json with schema — planning mode"})
+		st.LoopMode = state.ModePlanning
+	}
+
 	o.send(o.snapshot(tasks, st))
 
 	for {
