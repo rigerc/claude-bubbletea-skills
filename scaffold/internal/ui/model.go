@@ -9,9 +9,52 @@ import (
 	"scaffold/config"
 	"scaffold/internal/ui/banner"
 	"scaffold/internal/ui/keys"
+	"scaffold/internal/ui/menu"
 	"scaffold/internal/ui/screens"
 	"scaffold/internal/ui/theme"
 )
+
+// NavigateMsg is a message to navigate to a new screen.
+type NavigateMsg struct {
+	Screen screens.Screen
+}
+
+// BackMsg is a message to navigate back to the previous screen.
+type BackMsg struct{}
+
+// screenStack holds the navigation history.
+type screenStack struct {
+	screens []screens.Screen
+}
+
+// Push adds a screen to the stack.
+func (s *screenStack) Push(screen screens.Screen) {
+	s.screens = append(s.screens, screen)
+}
+
+// Pop removes and returns the top screen.
+func (s *screenStack) Pop() screens.Screen {
+	if len(s.screens) == 0 {
+		return nil
+	}
+	idx := len(s.screens) - 1
+	screen := s.screens[idx]
+	s.screens = s.screens[:idx]
+	return screen
+}
+
+// Peek returns the top screen without removing it.
+func (s *screenStack) Peek() screens.Screen {
+	if len(s.screens) == 0 {
+		return nil
+	}
+	return s.screens[len(s.screens)-1]
+}
+
+// Len returns the stack depth.
+func (s *screenStack) Len() int {
+	return len(s.screens)
+}
 
 // rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
 type rootModel struct {
@@ -24,6 +67,7 @@ type rootModel struct {
 	keys    keys.GlobalKeyMap
 	help    help.Model
 	current screens.Screen
+	stack   screenStack
 }
 
 // newRootModel creates a new root model.
@@ -62,8 +106,8 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.banner = b
 
 		// Propagate width to current screen
-		if h, ok := m.current.(interface{ SetWidth(int) screens.Home }); ok {
-			m.current = h.SetWidth(m.width)
+		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
+			m.current = setter.SetWidth(m.width)
 		}
 		return m, nil
 
@@ -71,12 +115,42 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isDark = msg.IsDark()
 		m.styles = theme.New(m.isDark, m.width)
 		m.help.Styles = help.DefaultStyles(m.isDark)
+		// Propagate theme to current screen
+		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
+			m.current = setter.SetStyles(m.isDark)
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:
 		if key.Matches(msg, m.keys.Quit) {
 			return m, tea.Quit
 		}
+		// Handle Back key (Escape)
+		if key.Matches(msg, m.keys.Back) {
+			if m.stack.Len() > 0 {
+				m.current = m.stack.Pop()
+				return m, nil
+			}
+		}
+
+	case NavigateMsg:
+		// Push current screen to stack and navigate to new screen
+		m.stack.Push(m.current)
+		m.current = msg.Screen
+		// Propagate width and theme to new screen
+		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
+			m.current = setter.SetWidth(m.width)
+		}
+		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
+			m.current = setter.SetStyles(m.isDark)
+		}
+		return m, nil
+
+	case menu.SelectionMsg:
+		// Convert menu selection to navigation
+		item := msg.Item
+		detail := screens.NewDetail(item.Title(), item.Description(), item.ScreenID())
+		return m.Update(NavigateMsg{Screen: detail})
 	}
 
 	// Delegate to current screen
@@ -109,9 +183,42 @@ func (m rootModel) headerView() string {
 	return m.styles.Header.Render(m.banner)
 }
 
-// helpView renders the persistent help box showing global keybindings.
+// helpView renders the persistent help box showing global and screen-specific keybindings.
 func (m rootModel) helpView() string {
-	return m.styles.Help.Render(m.help.View(m.keys))
+	combined := m.combinedKeys()
+	return m.styles.Help.Render(m.help.View(combined))
+}
+
+// combinedKeys returns a key map that combines global keys with screen-specific keys.
+func (m rootModel) combinedKeys() combinedKeyMap {
+	return combinedKeyMap{
+		global: m.keys,
+		screen: m.current,
+	}
+}
+
+// combinedKeyMap combines global and screen-specific key bindings.
+type combinedKeyMap struct {
+	global keys.GlobalKeyMap
+	screen screens.Screen
+}
+
+// ShortHelp returns combined short help bindings.
+func (c combinedKeyMap) ShortHelp() []key.Binding {
+	bindings := c.global.ShortHelp()
+	if kb, ok := c.screen.(screens.KeyBinder); ok {
+		bindings = append(bindings, kb.ShortHelp()...)
+	}
+	return bindings
+}
+
+// FullHelp returns combined full help bindings.
+func (c combinedKeyMap) FullHelp() [][]key.Binding {
+	groups := c.global.FullHelp()
+	if kb, ok := c.screen.(screens.KeyBinder); ok {
+		groups = append(groups, kb.FullHelp()...)
+	}
+	return groups
 }
 
 // footerView renders the status bar footer.
