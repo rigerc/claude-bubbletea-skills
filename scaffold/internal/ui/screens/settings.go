@@ -135,6 +135,25 @@ func (s Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle Enter key to submit from any field
+	if s.form.State == huh.StateNormal {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+			if keyMsg.String() == "enter" {
+				// Submit the form with Enter from any field
+				// Update the form one last time to capture current field values
+				form, formCmd := s.form.Update(msg)
+				if f, ok := form.(*huh.Form); ok {
+					s.form = f
+				}
+				// Trigger completion and save
+				saved := *s.cfg
+				return s, tea.Sequence(formCmd, func() tea.Msg {
+					return SettingsSavedMsg{Cfg: saved}
+				})
+			}
+		}
+	}
+
 	form, cmd := s.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		s.form = f

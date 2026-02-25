@@ -48,6 +48,12 @@ func (d Detail) Init() tea.Cmd {
 
 // Update handles messages for the detail screen.
 func (d Detail) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "esc":
+			return d, func() tea.Msg { return BackMsg{} }
+		}
+	}
 	return d, nil
 }
 
