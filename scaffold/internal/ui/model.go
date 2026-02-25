@@ -97,8 +97,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Render banner once with the window width
 		b, err := banner.Render(banner.Config{
 			Text:          m.cfg.App.Name,
+			Font:          "larry3d",
 			Width:         m.width - 10, // Account for padding
 			Justification: 0,            // Left aligned
+			Color:         theme.AccentHex(),
 		})
 		if err != nil {
 			b = m.cfg.App.Name

@@ -6,6 +6,7 @@ description: >-
   patterns to produce readable, idiomatic, maintainable Go. Use when writing new Go
   code, reviewing Go PRs, or auditing a Go codebase for style issues.
 user-invocable: true
+allowed-tools: Read, Grep, Bash(go doc *)
 metadata:
   source: https://google.github.io/styleguide/go
   version: "1.0"

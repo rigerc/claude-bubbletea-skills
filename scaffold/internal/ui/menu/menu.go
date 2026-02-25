@@ -114,9 +114,14 @@ func (m Model) SetItems(items []Item) Model {
 	if m.ready {
 		m.list.SetItems(listItems)
 	} else {
+		// Create delegate with theme styles if isDark is set
 		m.delegate = list.NewDefaultDelegate()
+		p := theme.NewPalette(m.isDark)
+		m.delegate.Styles = theme.ListItemStyles(p)
+
 		m.list = list.New(listItems, m.delegate, m.width, m.height)
 		m.list.Title = "Menu"
+		m.list.Styles = theme.ListStyles(p)
 		m.list.SetShowStatusBar(false)
 		m.list.SetShowPagination(false)
 		m.list.SetShowFilter(false)

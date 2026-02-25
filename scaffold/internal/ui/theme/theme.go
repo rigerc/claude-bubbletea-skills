@@ -12,8 +12,8 @@ import (
 // Palette defines semantic colors for the application theme.
 type Palette struct {
 	// Brand
-	Accent      color.Color // Charple - primary brand
-	AccentHover color.Color // Hazy - hover state
+	Accent      color.Color // Zinc - primary brand (teal)
+	AccentHover color.Color // Turtle - hover state (cyan)
 
 	// Foreground (adaptive)
 	Foreground color.Color // Primary text
@@ -27,7 +27,7 @@ type Palette struct {
 	Info    color.Color // Thunder
 
 	// Special
-	Inverse color.Color // Text on accent backgrounds (Butter)
+	Inverse color.Color // Text on accent backgrounds (Pepper)
 }
 
 // NewPalette creates a semantic color palette based on the background.
@@ -35,8 +35,8 @@ func NewPalette(isDark bool) Palette {
 	ld := lipgloss.LightDark(isDark)
 
 	return Palette{
-		Accent:      charmtone.Charple,
-		AccentHover: charmtone.Hazy,
+		Accent:      charmtone.Zinc,
+		AccentHover: charmtone.Turtle,
 		Foreground:  ld(charmtone.Pepper, charmtone.Salt),
 		Muted:       ld(charmtone.Charcoal, charmtone.Ash),
 		Subtle:      ld(charmtone.Squid, charmtone.Oyster),
@@ -44,8 +44,13 @@ func NewPalette(isDark bool) Palette {
 		Error:       charmtone.Sriracha,
 		Warning:     charmtone.Tang,
 		Info:        charmtone.Thunder,
-		Inverse:     charmtone.Butter,
+		Inverse:     charmtone.Pepper,
 	}
+}
+
+// AccentHex returns the accent color as a hex string (without '#').
+func AccentHex() string {
+	return charmtone.Zinc.Hex()
 }
 
 // Styles holds all styled components for the UI.
@@ -76,7 +81,7 @@ func newStylesFromPalette(p Palette, width int) Styles {
 		Footer: lipgloss.NewStyle().
 			MarginTop(1).
 			Border(lipgloss.RoundedBorder(), true).
-			BorderForeground(p.Subtle).
+			BorderForeground(p.Muted).
 			PaddingLeft(1),
 		StatusLeft: lipgloss.NewStyle().
 			Background(p.Accent).
@@ -137,20 +142,20 @@ func NewStatusStyles(isDark bool) StatusStyles {
 func ListStyles(p Palette) list.Styles {
 	s := list.DefaultStyles(false)
 
+	s.TitleBar = lipgloss.NewStyle().Padding(0, 0, 1, 2)
 	s.Title = lipgloss.NewStyle().
-		Foreground(p.Accent).
-		Bold(true).
+		Background(p.AccentHover).
+		Foreground(p.Inverse).
 		Padding(0, 1)
-	s.TitleBar = lipgloss.NewStyle()
 	s.Spinner = lipgloss.NewStyle().Foreground(p.Accent)
-	s.PaginationStyle = lipgloss.NewStyle().Foreground(p.Subtle)
-	s.HelpStyle = lipgloss.NewStyle().Foreground(p.Muted)
-	s.StatusBar = lipgloss.NewStyle().Foreground(p.Muted)
-	s.StatusEmpty = lipgloss.NewStyle().Foreground(p.Muted)
+	s.PaginationStyle = lipgloss.NewStyle().Foreground(p.Subtle).PaddingLeft(2)
+	s.HelpStyle = lipgloss.NewStyle().Foreground(p.Muted).Padding(1, 0, 0, 2)
+	s.StatusBar = lipgloss.NewStyle().Foreground(p.Muted).Padding(0, 0, 1, 2)
+	s.StatusEmpty = lipgloss.NewStyle().Foreground(p.Subtle)
 	s.NoItems = lipgloss.NewStyle().Foreground(p.Muted)
-	s.ActivePaginationDot = lipgloss.NewStyle().Foreground(p.Accent)
-	s.InactivePaginationDot = lipgloss.NewStyle().Foreground(p.Subtle)
-	s.DividerDot = lipgloss.NewStyle().Foreground(p.Subtle)
+	s.ActivePaginationDot = lipgloss.NewStyle().Foreground(p.Accent).SetString("•")
+	s.InactivePaginationDot = lipgloss.NewStyle().Foreground(p.Subtle).SetString("•")
+	s.DividerDot = lipgloss.NewStyle().Foreground(p.Subtle).SetString(" • ")
 
 	return s
 }
@@ -159,18 +164,21 @@ func ListStyles(p Palette) list.Styles {
 func ListItemStyles(p Palette) list.DefaultItemStyles {
 	s := list.NewDefaultItemStyles(false)
 
-	// Normal state
-	s.NormalTitle = lipgloss.NewStyle().Foreground(p.Foreground)
+	// Generate accent variant for unfocused items
+	accentNormal := lipgloss.Lighten(p.Accent, 0.70)
+
+	// Normal state (unfocused items)
+	s.NormalTitle = lipgloss.NewStyle().Foreground(accentNormal)
 	s.NormalDesc = lipgloss.NewStyle().Foreground(p.Muted)
 
-	// Selected state
+	// Selected state (focused item)
 	s.SelectedTitle = lipgloss.NewStyle().
 		Foreground(p.Accent).
 		Bold(true)
 	s.SelectedDesc = lipgloss.NewStyle().Foreground(p.Subtle)
 
-	// Dimmed state
-	s.DimmedTitle = lipgloss.NewStyle().Foreground(p.Muted)
+	// Dimmed state (when filter input is activated)
+	s.DimmedTitle = lipgloss.NewStyle().Foreground(p.Subtle)
 	s.DimmedDesc = lipgloss.NewStyle().Foreground(p.Subtle)
 
 	// Filter match

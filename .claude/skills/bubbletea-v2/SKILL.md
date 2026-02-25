@@ -8,6 +8,7 @@ description: >-
   multi-view terminal programs. Covers Model/Update/View pattern, message
   routing, command batching, color detection, and external process execution.
 argument-hint: [component|pattern|feature description]
+allowed-tools: Read, Grep, Bash(go doc *)
 metadata:
   author: skill-generator
   version: "1.0"
