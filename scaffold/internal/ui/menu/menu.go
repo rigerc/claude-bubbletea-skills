@@ -5,6 +5,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"scaffold/internal/ui/theme"
 )
 
 // Item represents a menu item.
@@ -130,8 +131,9 @@ func (m Model) SetItems(items []Item) Model {
 func (m Model) SetStyles(isDark bool) Model {
 	m.isDark = isDark
 	if m.ready {
-		m.list.Styles = list.DefaultStyles(isDark)
-		m.delegate.Styles = list.NewDefaultItemStyles(isDark)
+		p := theme.NewPalette(isDark)
+		m.list.Styles = theme.ListStyles(p)
+		m.delegate.Styles = theme.ListItemStyles(p)
 	}
 	return m
 }
