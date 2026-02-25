@@ -13,7 +13,17 @@ func DefaultGlobalKeyMap() GlobalKeyMap {
 	return GlobalKeyMap{
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
-			key.WithHelp("q", "quit"),
+			key.WithHelp("q/ctrl+c", "quit"),
 		),
 	}
+}
+
+// ShortHelp returns a slice of bindings for short help view.
+func (k GlobalKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Quit}
+}
+
+// FullHelp returns grouped bindings for full help view.
+func (k GlobalKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Quit}}
 }

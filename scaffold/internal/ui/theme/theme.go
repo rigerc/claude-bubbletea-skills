@@ -8,9 +8,11 @@ type Styles struct {
 	App         lipgloss.Style
 	Header      lipgloss.Style
 	Body        lipgloss.Style
+	Help        lipgloss.Style
 	Footer      lipgloss.Style
 	StatusLeft  lipgloss.Style
 	StatusRight lipgloss.Style
+	MaxWidth    int
 }
 
 // New creates a Styles struct with adaptive colors based on the background.
@@ -21,20 +23,24 @@ func New(isDark bool, width int) Styles {
 	fg := ld(lipgloss.Color("#1a1a1a"), lipgloss.Color("#f1f1f1"))
 
 	// Max width is 70% of terminal width
-	maxWidth := width * 70 / 100
-	if maxWidth < 60 {
+	maxWidth := width * 50 / 100
+	if maxWidth < 40 {
 		maxWidth = width - 4 // Minimum usable width
 	}
 
 	return Styles{
+		MaxWidth: maxWidth,
 		App: lipgloss.NewStyle().
 			Width(maxWidth).
 			Padding(0, 0),
 		Header: lipgloss.NewStyle().
-			Padding(0),
+			Padding(5),
 		Body: lipgloss.NewStyle().
 			Padding(0, 3).
 			Foreground(fg),
+		Help: lipgloss.NewStyle().
+			MarginTop(1).
+			Padding(0, 3),
 		Footer: lipgloss.NewStyle().
 			MarginTop(1).
 			Border(lipgloss.RoundedBorder(), true).

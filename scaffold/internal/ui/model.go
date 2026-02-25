@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -21,6 +22,7 @@ type rootModel struct {
 	ready   bool
 	styles  theme.Styles
 	keys    keys.GlobalKeyMap
+	help    help.Model
 	current screens.Screen
 }
 
@@ -30,6 +32,7 @@ func newRootModel(cfg config.Config) rootModel {
 		cfg:     cfg,
 		current: screens.NewHome(),
 		keys:    keys.DefaultGlobalKeyMap(),
+		help:    help.New(),
 	}
 }
 
@@ -45,6 +48,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.ready = true
 		m.styles = theme.New(m.isDark, m.width)
+		m.help.SetWidth(m.styles.MaxWidth)
 
 		// Render banner once with the window width
 		b, err := banner.Render(banner.Config{
@@ -66,6 +70,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.styles = theme.New(m.isDark, m.width)
+		m.help.Styles = help.DefaultStyles(m.isDark)
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -92,6 +97,7 @@ func (m rootModel) View() tea.View {
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		m.headerView(),
 		m.styles.Body.Render(m.current.Body()),
+		m.helpView(),
 		m.footerView(),
 	)
 
@@ -103,16 +109,20 @@ func (m rootModel) headerView() string {
 	return m.styles.Header.Render(m.banner)
 }
 
+// helpView renders the persistent help box showing global keybindings.
+func (m rootModel) helpView() string {
+	return m.styles.Help.Render(m.help.View(m.keys))
+}
+
 // footerView renders the status bar footer.
 func (m rootModel) footerView() string {
 	status := "Ready"
 	left := m.styles.StatusLeft.Render(" " + status + " ")
 	right := m.styles.StatusRight.Render(" v" + m.cfg.App.Version + " ")
-	appWidth := m.width * 70 / 100
-	if appWidth < 40 {
-		appWidth = m.width - 4
-	}
-	innerWidth := appWidth - 6 // Account for border + padding
+
+	// Account for footer border (2) and padding (1)
+	innerWidth := m.styles.MaxWidth - 3
+
 	gap := lipgloss.NewStyle().
 		Width(innerWidth - lipgloss.Width(left) - lipgloss.Width(right)).
 		Render("")
