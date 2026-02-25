@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -19,8 +21,19 @@ type NavigateMsg struct {
 	Screen screens.Screen
 }
 
-// BackMsg is a message to navigate back to the previous screen.
-type BackMsg struct{}
+// statusMsg is sent to update the footer status text.
+type statusMsg struct{ text string }
+
+// clearStatusMsg is sent after a delay to reset the footer.
+type clearStatusMsg struct{}
+
+// setStatus returns a Cmd that sets a timed status message.
+func setStatus(text string, duration time.Duration) tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg { return statusMsg{text: text} },
+		tea.Tick(duration, func(time.Time) tea.Msg { return clearStatusMsg{} }),
+	)
+}
 
 // screenStack holds the navigation history.
 type screenStack struct {
@@ -58,25 +71,30 @@ func (s *screenStack) Len() int {
 
 // rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
 type rootModel struct {
-	cfg     config.Config
-	width   int
-	banner  string
-	isDark  bool
-	ready   bool
-	styles  theme.Styles
-	keys    keys.GlobalKeyMap
-	help    help.Model
-	current screens.Screen
-	stack   screenStack
+	cfg        config.Config
+	configPath string // empty = no persistent save
+	status     string // footer status text
+	width      int
+	height     int
+	banner     string
+	isDark     bool
+	ready      bool
+	styles     theme.Styles
+	keys       keys.GlobalKeyMap
+	help       help.Model
+	current    screens.Screen
+	stack      screenStack
 }
 
 // newRootModel creates a new root model.
-func newRootModel(cfg config.Config) rootModel {
+func newRootModel(cfg config.Config, configPath string) rootModel {
 	return rootModel{
-		cfg:     cfg,
-		current: screens.NewHome(),
-		keys:    keys.DefaultGlobalKeyMap(),
-		help:    help.New(),
+		cfg:        cfg,
+		configPath: configPath,
+		status:     "Ready",
+		current:    screens.NewHome(),
+		keys:       keys.DefaultGlobalKeyMap(),
+		help:       help.New(),
 	}
 }
 
@@ -90,6 +108,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		m.ready = true
 		m.styles = theme.New(m.isDark, m.width)
 		m.help.SetWidth(m.styles.MaxWidth)
@@ -107,9 +126,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.banner = b
 
-		// Propagate width to current screen
+		// Propagate width and height to current screen
 		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
 			m.current = setter.SetWidth(m.width)
+		}
+		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
+			m.current = setter.SetHeight(m.bodyHeight())
 		}
 		return m, nil
 
@@ -127,32 +149,64 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.Quit) {
 			return m, tea.Quit
 		}
-		// Handle Back key (Escape)
-		if key.Matches(msg, m.keys.Back) {
-			if m.stack.Len() > 0 {
-				m.current = m.stack.Pop()
-				return m, nil
-			}
-		}
 
 	case NavigateMsg:
 		// Push current screen to stack and navigate to new screen
 		m.stack.Push(m.current)
 		m.current = msg.Screen
-		// Propagate width and theme to new screen
+		// Propagate width, height, and theme to new screen
 		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
 			m.current = setter.SetWidth(m.width)
+		}
+		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
+			m.current = setter.SetHeight(m.bodyHeight())
 		}
 		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
 			m.current = setter.SetStyles(m.isDark)
 		}
-		return m, nil
+		return m, m.current.Init()
 
 	case menu.SelectionMsg:
-		// Convert menu selection to navigation
-		item := msg.Item
-		detail := screens.NewDetail(item.Title(), item.Description(), item.ScreenID())
-		return m.Update(NavigateMsg{Screen: detail})
+		switch msg.Item.ScreenID() {
+		case "settings":
+			return m.Update(NavigateMsg{Screen: screens.NewSettings(m.cfg)})
+		default:
+			detail := screens.NewDetail(
+				msg.Item.Title(), msg.Item.Description(), msg.Item.ScreenID(),
+			)
+			return m.Update(NavigateMsg{Screen: detail})
+		}
+
+	case screens.SettingsSavedMsg:
+		m.cfg = msg.Cfg
+		var saveCmd tea.Cmd
+		if m.configPath != "" {
+			if err := config.Save(&m.cfg, m.configPath); err != nil {
+				saveCmd = setStatus("Save failed: "+err.Error(), 5*time.Second)
+			} else {
+				saveCmd = setStatus("Settings saved", 3*time.Second)
+			}
+		} else {
+			saveCmd = setStatus("Settings applied (no config file)", 3*time.Second)
+		}
+		if m.stack.Len() > 0 {
+			m.current = m.stack.Pop()
+		}
+		return m, saveCmd
+
+	case screens.BackMsg:
+		if m.stack.Len() > 0 {
+			m.current = m.stack.Pop()
+		}
+		return m, nil
+
+	case statusMsg:
+		m.status = msg.text
+		return m, nil
+
+	case clearStatusMsg:
+		m.status = "Ready"
+		return m, nil
 	}
 
 	// Delegate to current screen
@@ -223,10 +277,25 @@ func (c combinedKeyMap) FullHelp() [][]key.Binding {
 	return groups
 }
 
+// bodyHeight estimates the available height for the body content area.
+// It subtracts the header, help, and footer chrome from the terminal height.
+func (m rootModel) bodyHeight() int {
+	if m.height == 0 {
+		return 0
+	}
+	header := lipgloss.Height(m.headerView())
+	helpH := lipgloss.Height(m.helpView())
+	footer := lipgloss.Height(m.footerView())
+	body := m.height - header - helpH - footer
+	if body < 1 {
+		body = 1
+	}
+	return body
+}
+
 // footerView renders the status bar footer.
 func (m rootModel) footerView() string {
-	status := "Ready"
-	left := m.styles.StatusLeft.Render(" " + status + " ")
+	left := m.styles.StatusLeft.Render(" " + m.status + " ")
 	right := m.styles.StatusRight.Render(" v" + m.cfg.App.Version + " ")
 
 	// Account for footer border (2) and padding (1)

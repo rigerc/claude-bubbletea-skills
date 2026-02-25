@@ -27,38 +27,38 @@ var (
 type Config struct {
 	// LogLevel specifies the logging verbosity level.
 	// Valid values: trace, debug, info, warn, error, fatal
-	LogLevel string `json:"logLevel" mapstructure:"logLevel" koanf:"logLevel"`
+	LogLevel string `json:"logLevel" mapstructure:"logLevel" koanf:"logLevel" cfg_label:"Log Level" cfg_desc:"Logging verbosity (effective level shown in footer)" cfg_options:"trace,debug,info,warn,error,fatal"`
 
 	// Debug enables debug mode which sets log level to trace
 	// and enables additional debugging features.
-	Debug bool `json:"debug" mapstructure:"debug" koanf:"debug"`
+	Debug bool `json:"debug" mapstructure:"debug" koanf:"debug" cfg_label:"Debug Mode" cfg_desc:"Forces log level to trace; writes debug.log"`
 
 	// UI contains user interface specific configuration.
-	UI UIConfig `json:"ui" mapstructure:"ui" koanf:"ui"`
+	UI UIConfig `json:"ui" mapstructure:"ui" koanf:"ui" cfg_label:"UI Settings"`
 
 	// App contains general application configuration.
-	App AppConfig `json:"app" mapstructure:"app" koanf:"app"`
+	App AppConfig `json:"app" mapstructure:"app" koanf:"app" cfg_label:"Application"`
 }
 
 // UIConfig contains configuration specific to the user interface.
 type UIConfig struct {
 	// MouseEnabled enables mouse support in the TUI.
-	MouseEnabled bool `json:"mouseEnabled" mapstructure:"mouseEnabled" koanf:"mouseEnabled"`
+	MouseEnabled bool `json:"mouseEnabled" mapstructure:"mouseEnabled" koanf:"mouseEnabled" cfg_label:"Mouse Support" cfg_desc:"Enable mouse click and scroll events"`
 
 	// ThemeName specifies the color theme to use.
-	ThemeName string `json:"themeName" mapstructure:"themeName" koanf:"themeName"`
+	ThemeName string `json:"themeName" mapstructure:"themeName" koanf:"themeName" cfg_label:"Color Theme" cfg_desc:"Visual theme for the application" cfg_options:"default,dark,light"`
 }
 
 // AppConfig contains general application configuration.
 type AppConfig struct {
 	// Name is the application name.
-	Name string `json:"name" mapstructure:"name" koanf:"name"`
+	Name string `json:"name" mapstructure:"name" koanf:"name" cfg_label:"App Name" cfg_desc:"Displayed in the banner"`
 
 	// Version is the application version.
-	Version string `json:"version" mapstructure:"version" koanf:"version"`
+	Version string `json:"version" mapstructure:"version" koanf:"version" cfg_label:"Version" cfg_readonly:"true"`
 
 	// Title is the default window title.
-	Title string `json:"title" mapstructure:"title" koanf:"title"`
+	Title string `json:"title" mapstructure:"title" koanf:"title" cfg_label:"Window Title" cfg_desc:"Default title bar text"`
 }
 
 // Load reads configuration from the specified file path.

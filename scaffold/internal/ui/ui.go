@@ -8,8 +8,9 @@ import (
 )
 
 // New creates a new root model from the config.
-func New(cfg config.Config) rootModel {
-	return newRootModel(cfg)
+// configPath is the path to persist settings; empty means no file save.
+func New(cfg config.Config, configPath string) rootModel {
+	return newRootModel(cfg, configPath)
 }
 
 // Run starts the TUI program.
