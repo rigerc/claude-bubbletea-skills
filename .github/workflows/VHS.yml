@@ -12,7 +12,6 @@ jobs:
   vhs:
     name: Create VHS
     runs-on: macos-latest
-    if: ${{ github.repository == 'wxt-dev/wxt' }}
     permissions:
       contents: write
     steps:
