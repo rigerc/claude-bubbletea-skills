@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - vhs.tape
+  workflow_dispatch: 
 jobs:
   vhs:
     runs-on: ubuntu-latest
