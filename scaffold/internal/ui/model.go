@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"time"
-
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -13,26 +11,13 @@ import (
 	"scaffold/internal/ui/keys"
 	"scaffold/internal/ui/menu"
 	"scaffold/internal/ui/screens"
+	"scaffold/internal/ui/status"
 	"scaffold/internal/ui/theme"
 )
 
 // NavigateMsg is a message to navigate to a new screen.
 type NavigateMsg struct {
 	Screen screens.Screen
-}
-
-// statusMsg is sent to update the footer status text.
-type statusMsg struct{ text string }
-
-// clearStatusMsg is sent after a delay to reset the footer.
-type clearStatusMsg struct{}
-
-// setStatus returns a Cmd that sets a timed status message.
-func setStatus(text string, duration time.Duration) tea.Cmd {
-	return tea.Batch(
-		func() tea.Msg { return statusMsg{text: text} },
-		tea.Tick(duration, func(time.Time) tea.Msg { return clearStatusMsg{} }),
-	)
 }
 
 // screenStack holds the navigation history.
@@ -71,19 +56,20 @@ func (s *screenStack) Len() int {
 
 // rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
 type rootModel struct {
-	cfg        config.Config
-	configPath string // empty = no persistent save
-	status     string // footer status text
-	width      int
-	height     int
-	banner     string
-	themeMgr   *theme.Manager
-	ready      bool
-	styles     theme.Styles
-	keys       keys.GlobalKeyMap
-	help       help.Model
-	current    screens.Screen
-	stack      screenStack
+	cfg          config.Config
+	configPath   string // empty = no persistent save
+	status       status.State
+	statusStyles status.Styles
+	width        int
+	height       int
+	banner       string
+	themeMgr     *theme.Manager
+	ready        bool
+	styles       theme.Styles
+	keys         keys.GlobalKeyMap
+	help         help.Model
+	current      screens.Screen
+	stack        screenStack
 }
 
 // newRootModel creates a new root model.
@@ -91,7 +77,7 @@ func newRootModel(cfg config.Config, configPath string) rootModel {
 	return rootModel{
 		cfg:        cfg,
 		configPath: configPath,
-		status:     "Ready",
+		status:     status.State{Text: "Ready", Kind: status.KindNone},
 		themeMgr:   theme.GetManager(),
 		current:    screens.NewHome(),
 		keys:       keys.DefaultGlobalKeyMap(),
@@ -132,6 +118,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case theme.ThemeChangedMsg:
 		// Apply to self
 		m.styles = theme.NewFromPalette(msg.State.Palette, msg.State.Width)
+		m.statusStyles = status.NewStyles(msg.State.Palette)
 		m.help.SetWidth(m.styles.MaxWidth)
 
 		// Render/re-render banner with current theme palette
@@ -190,12 +177,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var saveCmd tea.Cmd
 		if m.configPath != "" {
 			if err := config.Save(&m.cfg, m.configPath); err != nil {
-				saveCmd = setStatus("Save failed: "+err.Error(), 5*time.Second)
+				saveCmd = status.SetError("Save failed: "+err.Error(), 0)
 			} else {
-				saveCmd = setStatus("Settings saved", 3*time.Second)
+				saveCmd = status.SetSuccess("Settings saved", 0)
 			}
 		} else {
-			saveCmd = setStatus("Settings applied (no config file)", 3*time.Second)
+			saveCmd = status.SetInfo("Settings applied (no config file)", 0)
 		}
 
 		// Handle theme change via manager
@@ -220,12 +207,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case statusMsg:
-		m.status = msg.text
+	case status.Msg:
+		m.status = status.State{Text: msg.Text, Kind: msg.Kind}
 		return m, nil
 
-	case clearStatusMsg:
-		m.status = "Ready"
+	case status.ClearMsg:
+		m.status = status.State{Text: "Ready", Kind: status.KindNone}
 		return m, nil
 	}
 
@@ -348,7 +335,7 @@ func (m rootModel) bodyHeight() int {
 
 // footerView renders the status bar footer.
 func (m rootModel) footerView() string {
-	left := m.styles.StatusLeft.Render(" " + m.status + " ")
+	left := m.statusStyles.Render(m.status.Text, m.status.Kind)
 	rightContent := " v" + m.cfg.App.Version
 	if m.cfg.Debug {
 		rightContent += " [DEBUG]"
