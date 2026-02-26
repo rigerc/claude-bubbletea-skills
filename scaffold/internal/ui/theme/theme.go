@@ -3,6 +3,7 @@ package theme
 
 import (
 	"image/color"
+	"sort"
 
 	"charm.land/bubbles/v2/list"
 	"charm.land/lipgloss/v2"
@@ -42,51 +43,47 @@ type Palette struct {
 	Info    color.Color
 }
 
-// AvailableThemes returns the list of built-in theme names.
+// -----------------------------------------------------------------------------
+// Available Themes
+// -----------------------------------------------------------------------------
+
+type ThemeSpec struct {
+	Name      string
+	Base      color.Color
+	Secondary color.Color
+
+	// Optional override hook
+	Modify func(p Palette, isDark bool) Palette
+}
+
+var themeRegistry = map[string]ThemeSpec{}
+
+// -----------------------------------------------------------------------------
+// Registration
+// -----------------------------------------------------------------------------
+
+func RegisterTheme(spec ThemeSpec) {
+	themeRegistry[spec.Name] = spec
+}
+
 func AvailableThemes() []string {
-	return []string{"default", "ocean", "forest"}
+	names := make([]string, 0, len(themeRegistry))
+	for name := range themeRegistry {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
-// defaultPalette creates the default charmtone-based palette.
-func defaultPalette(isDark bool) Palette {
+// -----------------------------------------------------------------------------
+// Core Palette Builder
+// -----------------------------------------------------------------------------
+
+func buildPalette(base, sec color.Color, isDark bool) Palette {
 	ld := lipgloss.LightDark(isDark)
 
 	var primary, primaryHover, secondary color.Color
-	if isDark {
-		primary = lipgloss.Lighten(charmtone.Zinc, 0.12)
-		primaryHover = lipgloss.Lighten(charmtone.Zinc, 0.22)
-		secondary = lipgloss.Lighten(charmtone.Charple, 0.12)
-	} else {
-		primary = charmtone.Zinc
-		primaryHover = lipgloss.Darken(charmtone.Zinc, 0.08)
-		secondary = charmtone.Charple
-	}
 
-	return Palette{
-		Primary:       primary,
-		PrimaryHover:  primaryHover,
-		Secondary:     secondary,
-		SubtlePrimary: desaturate(charmtone.Zinc, 0.30),
-
-		TextPrimary:   ld(charmtone.Pepper, charmtone.Salt),
-		TextSecondary: ld(charmtone.Charcoal, charmtone.Ash),
-		TextMuted:     ld(charmtone.Squid, charmtone.Oyster),
-		TextInverse:   charmtone.Pepper,
-
-		Error:   lipgloss.Complementary(charmtone.Zinc),
-		Success: lipgloss.Alpha(charmtone.Julep, 0.85),
-		Warning: lipgloss.Alpha(charmtone.Tang, 0.90),
-		Info:    lipgloss.Alpha(charmtone.Thunder, 0.90),
-	}
-}
-
-// oceanPalette creates a steel-blue / teal palette.
-func oceanPalette(isDark bool) Palette {
-	ld := lipgloss.LightDark(isDark)
-
-	base := lipgloss.Color("#4A90D9")
-	sec := lipgloss.Color("#2BC4C4")
-	var primary, primaryHover, secondary color.Color
 	if isDark {
 		primary = lipgloss.Lighten(base, 0.12)
 		primaryHover = lipgloss.Lighten(base, 0.22)
@@ -115,51 +112,88 @@ func oceanPalette(isDark bool) Palette {
 	}
 }
 
-// forestPalette creates a forest-green / amber palette.
-func forestPalette(isDark bool) Palette {
-	ld := lipgloss.LightDark(isDark)
+// -----------------------------------------------------------------------------
+// Public Factory
+// -----------------------------------------------------------------------------
 
-	base := lipgloss.Color("#4A7C59")
-	sec := lipgloss.Color("#C9913D")
-	var primary, primaryHover, secondary color.Color
-	if isDark {
-		primary = lipgloss.Lighten(base, 0.12)
-		primaryHover = lipgloss.Lighten(base, 0.22)
-		secondary = lipgloss.Lighten(sec, 0.12)
-	} else {
-		primary = base
-		primaryHover = lipgloss.Darken(base, 0.08)
-		secondary = sec
-	}
-
-	return Palette{
-		Primary:       primary,
-		PrimaryHover:  primaryHover,
-		Secondary:     secondary,
-		SubtlePrimary: desaturate(base, 0.30),
-
-		TextPrimary:   ld(charmtone.Pepper, charmtone.Salt),
-		TextSecondary: ld(charmtone.Charcoal, charmtone.Ash),
-		TextMuted:     ld(charmtone.Squid, charmtone.Oyster),
-		TextInverse:   charmtone.Pepper,
-
-		Error:   lipgloss.Complementary(base),
-		Success: lipgloss.Alpha(charmtone.Julep, 0.85),
-		Warning: lipgloss.Alpha(charmtone.Tang, 0.90),
-		Info:    lipgloss.Alpha(charmtone.Thunder, 0.90),
-	}
-}
-
-// NewPalette creates a semantic color palette for the given theme name and background.
 func NewPalette(name string, isDark bool) Palette {
-	switch name {
-	case "ocean":
-		return oceanPalette(isDark)
-	case "forest":
-		return forestPalette(isDark)
-	default:
-		return defaultPalette(isDark)
+	spec, ok := themeRegistry[name]
+	if !ok {
+		spec = themeRegistry["default"]
 	}
+
+	p := buildPalette(spec.Base, spec.Secondary, isDark)
+
+	if spec.Modify != nil {
+		p = spec.Modify(p, isDark)
+	}
+
+	return p
+}
+
+// -----------------------------------------------------------------------------
+// Theme Definitions
+// -----------------------------------------------------------------------------
+
+func init() {
+	RegisterTheme(ThemeSpec{
+		Name:      "default",
+		Base:      charmtone.Zinc,
+		Secondary: charmtone.Charple,
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "ocean",
+		Base:      lipgloss.Color("#4A90D9"),
+		Secondary: lipgloss.Color("#2BC4C4"),
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "forest",
+		Base:      lipgloss.Color("#4A7C59"),
+		Secondary: lipgloss.Color("#C9913D"),
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "sunset",
+		Base:      lipgloss.Color("#FF6B6B"),
+		Secondary: lipgloss.Color("#5F4B8B"),
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "aurora",
+		Base:      lipgloss.Color("#7F5AF0"),
+		Secondary: lipgloss.Color("#2CB67D"),
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "ember",
+		Base:      lipgloss.Color("#8B1E3F"),
+		Secondary: lipgloss.Color("#CFAE70"),
+		Modify: func(p Palette, _ bool) Palette {
+			p.TextInverse = charmtone.Salt
+			return p
+		},
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "neon",
+		Base:      lipgloss.Color("#00F5D4"),
+		Secondary: lipgloss.Color("#FF00C8"),
+		Modify: func(p Palette, _ bool) Palette {
+			p.Error = lipgloss.Color("#FF3B3B")
+			p.Success = lipgloss.Color("#00FF85")
+			p.Warning = lipgloss.Color("#FFD60A")
+			p.Info = lipgloss.Alpha(lipgloss.Color("#FF00C8"), 0.90)
+			return p
+		},
+	})
+
+	RegisterTheme(ThemeSpec{
+		Name:      "slate",
+		Base:      lipgloss.Color("#3A506B"),
+		Secondary: lipgloss.Color("#1C7ED6"),
+	})
 }
 
 // AccentHex returns the primary accent color as a hex string (without '#').
@@ -286,7 +320,7 @@ func ListItemStyles(p Palette) list.DefaultItemStyles {
 	s := list.NewDefaultItemStyles(false)
 
 	// Normal state (unfocused items)
-	s.NormalTitle = lipgloss.NewStyle().Foreground(p.SubtlePrimary)
+	s.NormalTitle = lipgloss.NewStyle().Foreground(p.Primary)
 	s.NormalDesc = lipgloss.NewStyle().Foreground(p.TextSecondary)
 
 	// Selected state (focused item)

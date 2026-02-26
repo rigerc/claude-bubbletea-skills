@@ -10,7 +10,7 @@ func DefaultConfig() *Config {
 		Debug:    false,
 		UI: UIConfig{
 			MouseEnabled: true,
-			ThemeName:    "default",
+			ThemeName:    "ember",
 			ShowBanner:   true,
 		},
 		App: AppConfig{

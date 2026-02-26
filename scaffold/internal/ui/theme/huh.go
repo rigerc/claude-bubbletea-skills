@@ -4,7 +4,6 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 )
-
 // HuhTheme returns a huh.Theme that matches the application palette for the given theme name.
 // Uses huh.ThemeFunc so huh drives isDark on every View() call.
 func HuhTheme(name string) huh.Theme {
