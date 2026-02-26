@@ -272,6 +272,11 @@ func New(name string, isDark bool, width int) Styles {
 	return newStylesFromPalette(NewPalette(name, isDark), width)
 }
 
+// NewFromPalette creates Styles from an existing Palette (avoids recalculation).
+func NewFromPalette(p Palette, width int) Styles {
+	return newStylesFromPalette(p, width)
+}
+
 // DetailStyles holds styles for the detail screen.
 type DetailStyles struct {
 	Title   lipgloss.Style

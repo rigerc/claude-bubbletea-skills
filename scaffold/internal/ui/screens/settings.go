@@ -52,13 +52,14 @@ func defaultSettingsKeyMap() settingsKeyMap {
 
 // Settings is the settings screen backed by a dynamic huh form.
 type Settings struct {
+	theme.ThemeAware
+
 	cfg    *config.Config
 	form   *huh.Form
 	groups []config.GroupMeta
 	keys   settingsKeyMap
 	width  int
 	height int
-	isDark bool
 }
 
 // NewSettings creates a Settings screen from a config snapshot.
@@ -113,10 +114,11 @@ func (s Settings) SetHeight(h int) Screen {
 	return s
 }
 
-// SetStyles sets the screen styles based on theme name and dark/light mode.
-func (s Settings) SetStyles(name string, isDark bool) Screen {
-	s.isDark = isDark
-	return s
+// ApplyTheme implements theme.Themeable.
+func (s *Settings) ApplyTheme(state theme.State) {
+	s.ApplyThemeState(state)
+	// Rebuild form with new theme
+	s.form = s.form.WithTheme(theme.HuhTheme(state.Name))
 }
 
 // Init initializes the settings form.

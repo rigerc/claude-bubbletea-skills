@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"scaffold/internal/ui/menu"
+	"scaffold/internal/ui/theme"
 )
 
 // Screen is the interface for screen components that can be composed.
@@ -22,22 +23,24 @@ type KeyBinder interface {
 
 // Home is the home screen with a menu.
 type Home struct {
-	width  int
-	isDark bool
-	menu   menu.Model
-	ready  bool
+	theme.ThemeAware
+
+	width int
+	menu  *menu.Model
+	ready bool
 }
 
 // NewHome creates a new Home screen.
 func NewHome() Home {
 	m := menu.New()
+	m = m.SetItems([]menu.Item{
+		menu.NewItem("Dashboard", "View application dashboard", "dashboard"),
+		menu.NewItem("Settings", "Configure application settings", "settings"),
+		menu.NewItem("Profile", "Manage your profile", "profile"),
+		menu.NewItem("About", "About this application", "about"),
+	})
 	return Home{
-		menu: m.SetItems([]menu.Item{
-			menu.NewItem("Dashboard", "View application dashboard", "dashboard"),
-			menu.NewItem("Settings", "Configure application settings", "settings"),
-			menu.NewItem("Profile", "Manage your profile", "profile"),
-			menu.NewItem("About", "About this application", "about"),
-		}),
+		menu: &m,
 	}
 }
 
@@ -49,15 +52,14 @@ func (h Home) SetWidth(w int) Screen {
 	if height == 0 {
 		height = 10 // fallback
 	}
-	h.menu = h.menu.SetSize(w-6, height)
+	*h.menu = h.menu.SetSize(w-6, height)
 	return h
 }
 
-// SetStyles sets the screen styles based on theme name and dark/light mode.
-func (h Home) SetStyles(name string, isDark bool) Screen {
-	h.isDark = isDark
-	h.menu = h.menu.SetStyles(name, isDark)
-	return h
+// ApplyTheme implements theme.Themeable.
+func (h *Home) ApplyTheme(state theme.State) {
+	h.ApplyThemeState(state)
+	h.menu.ApplyTheme(state)
 }
 
 // Init initializes the home screen.
@@ -68,7 +70,7 @@ func (h Home) Init() tea.Cmd {
 // Update handles messages for the home screen.
 func (h Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	h.menu, cmd = h.menu.Update(msg)
+	*h.menu, cmd = h.menu.Update(msg)
 	return h, cmd
 }
 

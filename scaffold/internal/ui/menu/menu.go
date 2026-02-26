@@ -79,14 +79,14 @@ type SelectionMsg struct {
 
 // Model is the menu component.
 type Model struct {
-	list      list.Model
-	delegate  list.DefaultDelegate
-	keys      keyMap
+	theme.ThemeAware
+
+	list     list.Model
+	delegate list.DefaultDelegate
+	keys     keyMap
 	ready     bool
 	width     int
 	height    int
-	isDark    bool
-	themeName string
 }
 
 // New creates a new menu model.
@@ -117,8 +117,11 @@ func (m Model) SetItems(items []Item) Model {
 		m.list.SetItems(listItems)
 	} else {
 		// Create delegate with theme styles
+		p := m.Palette()
+		if p.Primary == nil {
+			p = theme.NewPalette("default", false) // fallback
+		}
 		m.delegate = list.NewDefaultDelegate()
-		p := theme.NewPalette(m.themeName, m.isDark)
 		m.delegate.Styles = theme.ListItemStyles(p)
 
 		m.list = list.New(listItems, m.delegate, m.width, m.height)
@@ -135,20 +138,18 @@ func (m Model) SetItems(items []Item) Model {
 	return m
 }
 
-// SetStyles sets the menu styles based on theme name and dark/light mode.
-func (m Model) SetStyles(name string, isDark bool) Model {
-	m.themeName = name
-	m.isDark = isDark
+// ApplyTheme implements theme.Themeable.
+func (m *Model) ApplyTheme(state theme.State) {
+	m.ApplyThemeState(state)
+
 	if m.ready {
-		p := theme.NewPalette(name, isDark)
+		p := state.Palette
 		m.list.Styles = theme.ListStyles(p)
 
-		// Create a fresh delegate with updated styles to ensure proper theming
 		m.delegate = list.NewDefaultDelegate()
 		m.delegate.Styles = theme.ListItemStyles(p)
 		m.list.SetDelegate(m.delegate)
 	}
-	return m
 }
 
 // Init initializes the menu.
