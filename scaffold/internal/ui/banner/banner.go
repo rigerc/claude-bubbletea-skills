@@ -8,7 +8,6 @@ import (
 	"math/rand/v2"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/lsferreira42/figlet-go/figlet"
 )
@@ -183,22 +182,76 @@ func RandomFont() string {
 	return fonts[rand.IntN(len(fonts))]
 }
 
-// GradientThemed builds a *Gradient that flows from primary to secondary by
-// blending them across 7 stops with lipgloss.Blend1D.
+// GradientConfig controls gradient generation parameters.
+type GradientConfig struct {
+	Stops  int  // Number of color stops (default: 7)
+	UseHcl bool // Use HCL blending for perceptual uniformity (default: true)
+}
+
+// GradientThemedWithConfig builds a gradient with configurable blending.
+// Uses HCL blending by default for perceptually smooth transitions.
+func GradientThemedWithConfig(primary, secondary color.Color, cfg GradientConfig) *Gradient {
+	if cfg.Stops <= 0 {
+		cfg.Stops = 7
+	}
+
+	p1, ok1 := colorful.MakeColor(primary)
+	p2, ok2 := colorful.MakeColor(secondary)
+	if !ok1 || !ok2 {
+		return &Gradient{Name: "themed", Colors: []string{"888888"}}
+	}
+
+	hexes := make([]string, cfg.Stops)
+	for i := 0; i < cfg.Stops; i++ {
+		t := float64(i) / float64(cfg.Stops-1)
+
+		var blended colorful.Color
+		if cfg.UseHcl {
+			blended = p1.BlendHcl(p2, t).Clamped()
+		} else {
+			blended = p1.BlendLab(p2, t).Clamped()
+		}
+		hexes[i] = blended.Hex()[1:] // strip '#'
+	}
+
+	return &Gradient{Name: "themed", Colors: hexes}
+}
+
+// GradientThemed builds a *Gradient that flows from primary to secondary.
+// Uses HCL blending for perceptually smooth color transitions.
 // Returns *Gradient so it can be assigned inline in banner.Config{Gradient: ...}.
 // Pass palette.Primary and palette.Secondary to derive a theme-matched gradient.
 func GradientThemed(primary, secondary color.Color) *Gradient {
-	stops := lipgloss.Blend1D(7, primary, secondary)
-	hexes := make([]string, len(stops))
-	for i, c := range stops {
-		cf, ok := colorful.MakeColor(c)
-		if !ok {
-			hexes[i] = "888888"
-			continue
-		}
-		hexes[i] = cf.Hex()[1:] // strip leading '#'
+	return GradientThemedWithConfig(primary, secondary, GradientConfig{
+		Stops:  7,
+		UseHcl: true,
+	})
+}
+
+// GenerateGradient creates a perceptually smooth gradient between two hex colors.
+// Uses HCL blending for smooth transitions.
+func GenerateGradient(name, startHex, endHex string, stops int) (Gradient, error) {
+	start, err := colorful.Hex("#" + strings.TrimPrefix(startHex, "#"))
+	if err != nil {
+		return Gradient{}, fmt.Errorf("invalid start color: %w", err)
 	}
-	return &Gradient{Name: "themed", Colors: hexes}
+	end, err := colorful.Hex("#" + strings.TrimPrefix(endHex, "#"))
+	if err != nil {
+		return Gradient{}, fmt.Errorf("invalid end color: %w", err)
+	}
+
+	if stops <= 0 {
+		stops = 7
+	}
+
+	colors := make([]string, stops)
+	for i := 0; i < stops; i++ {
+		t := float64(i) / float64(stops-1)
+		blended := start.BlendHcl(end, t).Clamped()
+		colors[i] = blended.Hex()[1:]
+	}
+
+	return Gradient{Name: name, Colors: colors}, nil
 }
 
 // Config defines parameters for rendering an ASCII banner.

@@ -1,7 +1,9 @@
 package theme
 
 import (
+	"fmt"
 	"image/color"
+	"math"
 	"sort"
 
 	"charm.land/bubbles/v2/list"
@@ -11,26 +13,152 @@ import (
 )
 
 
-// desaturate returns c with its HSL saturation reduced to s (0–1).
-// go-colorful is used here because lipgloss has no saturation adjuster.
-func desaturate(c color.Color, s float64) color.Color {
-	cf, ok := colorful.MakeColor(c)
-	if !ok {
-		return c
+// -----------------------------------------------------------------------------
+// HCL-Based Color Manipulation (Perceptually Uniform)
+// -----------------------------------------------------------------------------
+
+// wrapHue normalizes hue to [0, 360) range.
+func wrapHue(h float64) float64 {
+	for h < 0 {
+		h += 360
 	}
-	h, _, l := cf.Hsl()
-	return colorful.Hsl(h, s, l)
+	for h >= 360 {
+		h -= 360
+	}
+	return h
 }
 
-// saturate returns c with its HSL saturation set to s (0–1).
-// Used for hover states to provide saturation-based feedback.
-func saturate(c color.Color, s float64) color.Color {
+// desaturateHcl returns c with its HCL chroma reduced to s (0-1).
+// Uses HCL color space for perceptually uniform desaturation.
+// Always returns a valid color via Clamped().
+func desaturateHcl(c color.Color, s float64) color.Color {
 	cf, ok := colorful.MakeColor(c)
 	if !ok {
 		return c
 	}
-	h, _, l := cf.Hsl()
-	return colorful.Hsl(h, s, l)
+	h, _, l := cf.Hcl()
+	return colorful.Hcl(h, s, l).Clamped()
+}
+
+// saturateHcl returns c with its HCL chroma set to s (0-1).
+// Uses HCL color space for perceptually uniform saturation.
+func saturateHcl(c color.Color, s float64) color.Color {
+	cf, ok := colorful.MakeColor(c)
+	if !ok {
+		return c
+	}
+	h, _, l := cf.Hcl()
+	return colorful.Hcl(h, s, l).Clamped()
+}
+
+// lightenHcl lightens a color by delta in HCL lightness space.
+// delta is additive to L (0-1 range). Positive = lighter.
+func lightenHcl(c color.Color, delta float64) color.Color {
+	cf, ok := colorful.MakeColor(c)
+	if !ok {
+		return c
+	}
+	h, cVal, l := cf.Hcl()
+	newL := math.Max(0, math.Min(1, l+delta))
+	return colorful.Hcl(h, cVal, newL).Clamped()
+}
+
+// darkenHcl darkens a color by delta in HCL lightness space.
+// delta is subtracted from L (0-1 range). Positive = darker.
+func darkenHcl(c color.Color, delta float64) color.Color {
+	return lightenHcl(c, -delta)
+}
+
+// colorDistance computes perceptual distance using CIEDE2000.
+func colorDistance(c1, c2 color.Color) float64 {
+	cf1, ok1 := colorful.MakeColor(c1)
+	cf2, ok2 := colorful.MakeColor(c2)
+	if !ok1 || !ok2 {
+		return 1.0 // Max distance for invalid colors
+	}
+	return cf1.DistanceCIEDE2000(cf2)
+}
+
+// Backward-compatible aliases using HCL internally.
+// These replace the original HSL-based implementations.
+
+// desaturate returns c with its chroma reduced to s (0-1).
+// Uses HCL for perceptually uniform desaturation.
+func desaturate(c color.Color, s float64) color.Color {
+	return desaturateHcl(c, s)
+}
+
+// saturate returns c with its chroma set to s (0-1).
+// Uses HCL for perceptually uniform saturation.
+func saturate(c color.Color, s float64) color.Color {
+	return saturateHcl(c, s)
+}
+
+// -----------------------------------------------------------------------------
+// Color Variant Generation
+// -----------------------------------------------------------------------------
+
+// ColorVariant represents a generated color variant.
+type ColorVariant struct {
+	Name  string
+	Color color.Color
+}
+
+// GenerateVariants creates perceptually uniform color variants from a base color.
+// Uses HCL hue rotation for harmonious color relationships.
+func GenerateVariants(base color.Color) []ColorVariant {
+	cf, ok := colorful.MakeColor(base)
+	if !ok {
+		return nil
+	}
+	h, c, l := cf.Hcl()
+
+	return []ColorVariant{
+		{Name: "complementary", Color: colorful.Hcl(wrapHue(h+180), c, l).Clamped()},
+		{Name: "analogous1", Color: colorful.Hcl(wrapHue(h+30), c, l).Clamped()},
+		{Name: "analogous2", Color: colorful.Hcl(wrapHue(h-30), c, l).Clamped()},
+		{Name: "triadic1", Color: colorful.Hcl(wrapHue(h+120), c, l).Clamped()},
+		{Name: "triadic2", Color: colorful.Hcl(wrapHue(h-120), c, l).Clamped()},
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Palette Validation
+// -----------------------------------------------------------------------------
+
+// ValidatePalette checks that palette colors meet perceptual distance requirements.
+// Returns warnings for colors that are too similar (confusion risk).
+func ValidatePalette(p Palette) []string {
+	var warnings []string
+
+	// Check text contrast with primary
+	if dist := colorDistance(p.TextPrimary, p.Primary); dist < 0.5 {
+		warnings = append(warnings, "TextPrimary may have insufficient contrast with Primary")
+	}
+
+	// Check status color distinctness
+	statusColors := []struct {
+		name string
+		col  color.Color
+	}{
+		{"Success", p.Success},
+		{"Error", p.Error},
+		{"Warning", p.Warning},
+		{"Info", p.Info},
+	}
+
+	for i := 0; i < len(statusColors); i++ {
+		for j := i + 1; j < len(statusColors); j++ {
+			dist := colorDistance(statusColors[i].col, statusColors[j].col)
+			if dist < 0.15 {
+				warnings = append(warnings, fmt.Sprintf(
+					"%s and %s are too similar (distance: %.2f)",
+					statusColors[i].name, statusColors[j].name, dist))
+			}
+		}
+	}
+
+	return warnings
 }
 
 // Palette defines semantic colors for the application theme.
@@ -96,14 +224,14 @@ func buildPalette(base, sec color.Color, isDark bool) Palette {
 	var primary, primaryHover, secondary color.Color
 
 	if isDark {
-		primary = lipgloss.Lighten(base, 0.12)
-		// Hover: increase both lightness AND saturation for clear affordance
-		primaryHover = saturate(lipgloss.Lighten(base, 0.22), 0.85)
-		secondary = lipgloss.Lighten(sec, 0.12)
+		primary = lightenHcl(base, 0.12)
+		// Hover: increase both lightness AND chroma for clear affordance
+		primaryHover = saturateHcl(lightenHcl(base, 0.22), 0.85)
+		secondary = lightenHcl(sec, 0.12)
 	} else {
 		primary = base
-		// Hover: darken slightly with saturation boost for clear affordance
-		primaryHover = saturate(lipgloss.Darken(base, 0.08), 0.90)
+		// Hover: darken slightly with chroma boost for clear affordance
+		primaryHover = saturateHcl(darkenHcl(base, 0.08), 0.90)
 		secondary = sec
 	}
 
