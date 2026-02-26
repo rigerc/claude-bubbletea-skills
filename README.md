@@ -1,5 +1,7 @@
 # bubbletea-v2-scaffold
 
+[img]scaffold.gif[/img]
+
 A monorepo of **Claude Code skills** and a **production-ready BubbleTea v2 project scaffold** for building terminal user interface (TUI) applications in Go with the full Charm ecosystem.
 
 ---
