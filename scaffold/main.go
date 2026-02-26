@@ -27,7 +27,7 @@ func main() {
 		return
 	}
 
-	cfg := loadConfig()
+	cfg, configPath := loadConfig()
 
 	// In TUI mode the terminal is occupied, so all logging must go to a file
 	// (debug mode) or be silenced entirely (normal mode).
@@ -47,7 +47,7 @@ func main() {
 
 	applogger.Info().Msg("Starting scaffold")
 
-	if err := ui.Run(ui.New(*cfg)); err != nil {
+	if err := ui.Run(ui.New(*cfg, configPath)); err != nil {
 		applogger.Fatal().Err(err).Msg("UI failed")
 	}
 }
@@ -85,13 +85,16 @@ func initLogger(cfg *config.Config, output io.Writer) error {
 
 // loadConfig builds the effective config following priority order:
 // defaults → config file → CLI flags (only when explicitly set).
-func loadConfig() *config.Config {
+// Returns the config and the path used (empty if no file was loaded).
+func loadConfig() (*config.Config, string) {
 	cfg := config.DefaultConfig()
+	configPath := ""
 
 	if path := cmd.GetConfigFile(); path != "" {
 		fileCfg, err := config.Load(path)
 		if err == nil {
 			cfg = fileCfg
+			configPath = path
 		}
 		// ErrConfigNotFound or parse error → silently fall back to defaults
 	}
@@ -104,5 +107,5 @@ func loadConfig() *config.Config {
 		cfg.LogLevel = cmd.GetLogLevel()
 	}
 
-	return cfg
+	return cfg, configPath
 }

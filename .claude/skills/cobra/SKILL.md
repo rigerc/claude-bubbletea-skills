@@ -6,6 +6,7 @@ description: >-
   shell completions, help generation, argument validation, or migrating from other CLI libraries.
   Covers Command struct, AddCommand, flags (local/persistent), PreRun/PostRun hooks, 
   ValidArgs, completions for bash/zsh/fish/powershell, and integration with viper.
+allowed-tools: Read, Grep, Bash(go doc *)
 ---
 
 # Cobra CLI Framework

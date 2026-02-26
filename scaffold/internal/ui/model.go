@@ -1,296 +1,309 @@
-// Package ui provides the BubbleTea UI model for the application.
-// It implements a stack-based navigation router with theme support.
 package ui
 
 import (
-	"fmt"
+	"time"
 
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"scaffold/config"
-	applogger "scaffold/internal/logger"
-	"scaffold/internal/ui/nav"
+	"scaffold/internal/ui/banner"
+	"scaffold/internal/ui/keys"
+	"scaffold/internal/ui/menu"
 	"scaffold/internal/ui/screens"
+	"scaffold/internal/ui/theme"
 )
 
-// Model represents the application state with a navigation stack.
-type Model struct {
-	// screens holds the navigation stack. The last element is the active screen.
-	screens []nav.Screen
-
-	// width and height store the current terminal dimensions.
-	width, height int
-
-	// isDark indicates if the terminal has a dark background.
-	isDark bool
-
-	// quitting is set to true when the app is about to exit.
-	quitting bool
-
-	// Config-derived fields (extracted from config.Config at construction).
-	altScreen    bool
-	mouseEnabled bool
-	windowTitle  string
+// NavigateMsg is a message to navigate to a new screen.
+type NavigateMsg struct {
+	Screen screens.Screen
 }
 
-// New creates a new Model with the provided configuration.
-// It accepts config.Config as a value type (main.go passes *cfg dereferenced).
-func New(cfg config.Config) Model {
-	// Define sample content for detail screens.
-	detailContent := `This is a detail screen with scrollable content.
+// statusMsg is sent to update the footer status text.
+type statusMsg struct{ text string }
 
-Scroll controls:
-  • j / ↓        — line down
-  • k / ↑        — line up
-  • d / page down — half page down
-  • u / page up   — half page up
-  • g / home      — top
-  • G / end       — bottom
-  • mouse wheel   — scroll
+// clearStatusMsg is sent after a delay to reset the footer.
+type clearStatusMsg struct{}
 
-Press ESC to return to the menu.
+// setStatus returns a Cmd that sets a timed status message.
+func setStatus(text string, duration time.Duration) tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg { return statusMsg{text: text} },
+		tea.Tick(duration, func(time.Time) tea.Msg { return clearStatusMsg{} }),
+	)
+}
 
-─────────────────────────────────────
+// screenStack holds the navigation history.
+type screenStack struct {
+	screens []screens.Screen
+}
 
-Section 1 — Lorem Ipsum
+// Push adds a screen to the stack.
+func (s *screenStack) Push(screen screens.Screen) {
+	s.screens = append(s.screens, screen)
+}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
-tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
-quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo.
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore
-eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.
-
-─────────────────────────────────────
-
-Section 2 — More Filler
-
-Sunt in culpa qui officia deserunt mollit anim id est laborum. Curabitur
-pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis
-molestie pretium placerat, arcu ante tincidunt purus, vel bibendum nisi.
-
-Pellentesque habitant morbi tristique senectus et netus et malesuada fames
-ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget,
-tempor sit amet, ante. Donec eu libero sit amet quam egestas semper.
-
-─────────────────────────────────────
-
-Section 3 — Even More
-
-Aenean ultricies mi vitae est. Mauris placerat eleifend leo. Quisque sit
-amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum
-sed, commodo vitae, ornare sit amet, wisi. Aenean fermentum, elit eget
-tincidunt condimentum, eros ipsum rutrum orci.
-
-Nullam venenatis felis eu purus vestibulum, nec malesuada nisl iaculis.
-Fusce aliquet purus vel mauris pharetra, a condimentum lectus tincidunt.
-
-─────────────────────────────────────
-
-End of content.`
-
-	aboutContent := `scaffold
-
-A BubbleTea v2 skeleton application with:
-  • Stack-based navigation
-  • Adaptive light/dark theming
-  • List-based menu navigation
-  • Scrollable detail screens with capped height
-
-Built with:
-  • charm.land/bubbletea/v2
-  • charm.land/bubbles/v2
-  • charm.land/lipgloss/v2
-  • github.com/spf13/cobra
-  • github.com/knadh/koanf/v2
-  • github.com/rs/zerolog
-
-─────────────────────────────────────
-
-Architecture
-
-The application uses a stack-based navigator (internal/ui/nav). Each screen
-implements the nav.Screen interface (Init / Update / View). The root model
-holds the stack and fans messages out to the active screen.
-
-Theme detection uses tea.RequestBackgroundColor, which fires a
-tea.BackgroundColorMsg carrying the terminal's actual background colour.
-Screens implement nav.Themeable to receive isDark updates.
-
-Config is loaded via koanf: defaults → config file → env vars → flags.
-Logging uses zerolog with a file sink so it doesn't interfere with the TUI.
-
-─────────────────────────────────────
-
-Press ESC to return to the menu.`
-
-	// Create menu items using Huh-based menu.
-	menuOptions := []screens.HuhMenuOption{
-		{
-			Title:       "Details",
-			Description: "View a detail screen",
-			Action:      nav.Push(screens.NewDetailScreen("Details", detailContent, false, cfg.App.Name)),
-		},
-		{
-			Title:       "Browse Files",
-			Description: "Browse the filesystem",
-			Action:      nav.Push(screens.NewHuhFilePickerScreen(".", false, cfg.App.Name)),
-		},
-		{
-			Title:       "Settings",
-			Description: "Configure application",
-			Action:      nav.Push(screens.NewSettingsScreen(false, cfg.App.Name)),
-		},
-		{
-			Title:       "Banner Demo",
-			Description: "Showcase ASCII fonts and gradients",
-			Action:      nav.Push(screens.NewBannerDemoScreen(false, cfg.App.Name)),
-		},
-		{
-			Title:       "About",
-			Description: "About this application",
-			Action:      nav.Push(screens.NewDetailScreen("About", aboutContent, false, cfg.App.Name)),
-		},
+// Pop removes and returns the top screen.
+func (s *screenStack) Pop() screens.Screen {
+	if len(s.screens) == 0 {
+		return nil
 	}
+	idx := len(s.screens) - 1
+	screen := s.screens[idx]
+	s.screens = s.screens[:idx]
+	return screen
+}
 
-	root := screens.NewHuhMenuScreen(menuOptions, false, cfg.App.Name)
+// Peek returns the top screen without removing it.
+func (s *screenStack) Peek() screens.Screen {
+	if len(s.screens) == 0 {
+		return nil
+	}
+	return s.screens[len(s.screens)-1]
+}
 
-	return Model{
-		screens:      []nav.Screen{root},
-		altScreen:    cfg.UI.AltScreen,
-		mouseEnabled: cfg.UI.MouseEnabled,
-		windowTitle:  cfg.App.Title,
+// Len returns the stack depth.
+func (s *screenStack) Len() int {
+	return len(s.screens)
+}
+
+// rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
+type rootModel struct {
+	cfg        config.Config
+	configPath string // empty = no persistent save
+	status     string // footer status text
+	width      int
+	height     int
+	banner     string
+	isDark     bool
+	ready      bool
+	styles     theme.Styles
+	keys       keys.GlobalKeyMap
+	help       help.Model
+	current    screens.Screen
+	stack      screenStack
+}
+
+// newRootModel creates a new root model.
+func newRootModel(cfg config.Config, configPath string) rootModel {
+	return rootModel{
+		cfg:        cfg,
+		configPath: configPath,
+		status:     "Ready",
+		current:    screens.NewHome(),
+		keys:       keys.DefaultGlobalKeyMap(),
+		help:       help.New(),
 	}
 }
 
-// Init returns the initial command. It requests the terminal background color
-// and initializes the root screen.
-func (m Model) Init() tea.Cmd {
-	applogger.Debug().Msg("Initializing UI model")
-	cmds := []tea.Cmd{tea.RequestBackgroundColor}
-	if len(m.screens) > 0 {
-		cmds = append(cmds, m.screens[len(m.screens)-1].Init())
-	}
-	return tea.Batch(cmds...)
+// Init initializes the root model.
+func (m rootModel) Init() tea.Cmd {
+	return tea.RequestBackgroundColor
 }
 
-// Update handles incoming messages and returns an updated model and command.
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-
+// Update handles messages for the root model.
+func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
-			applogger.Debug().Msg("Quit key pressed")
-			m.quitting = true
-			return m, tea.Quit
-		}
-
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		applogger.Debug().Msgf("Window resized: %dx%d", m.width, m.height)
-		// fall through to delegate to active screen
+		m.width = msg.Width
+		m.height = msg.Height
+		m.ready = true
+		m.styles = theme.New(m.isDark, m.width)
+		m.help.SetWidth(m.styles.MaxWidth)
+
+		// Render banner once with the window width
+		b, err := banner.Render(banner.Config{
+			Text:          m.cfg.App.Name,
+			Font:          "larry3d",
+			Width:         m.width - 10, // Account for padding
+			Justification: 0,            // Left aligned
+			Color:         theme.AccentHex(),
+		})
+		if err != nil {
+			b = m.cfg.App.Name
+		}
+		m.banner = b
+
+		// Propagate width and height to current screen
+		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
+			m.current = setter.SetWidth(m.width)
+		}
+		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
+			m.current = setter.SetHeight(m.bodyHeight())
+		}
+		return m, nil
 
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
-		applogger.Debug().Msgf("Background color detected: isDark=%v", m.isDark)
-		// Propagate theme to ALL screens in stack
-		for i := range m.screens {
-			if t, ok := m.screens[i].(nav.Themeable); ok {
-				t.SetTheme(m.isDark)
-			}
-		}
-		// fall through to deliver msg to active screen
-
-	case nav.PushMsg:
-		s := msg.Screen
-		if cmd := s.Init(); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-		if t, ok := s.(nav.Themeable); ok {
-			t.SetTheme(m.isDark)
-		}
-		s, cmd := s.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-		cmds = append(cmds, cmd)
-		m.screens = append(m.screens, s)
-		return m, tea.Batch(cmds...)
-
-	case nav.PopMsg:
-		if len(m.screens) > 1 {
-			m.screens = m.screens[:len(m.screens)-1]
-			// Refresh the newly-exposed screen with current window size
-			top := m.screens[len(m.screens)-1]
-			updated, cmd := top.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-			m.screens[len(m.screens)-1] = updated
-			return m, cmd
+		m.styles = theme.New(m.isDark, m.width)
+		m.help.Styles = help.DefaultStyles(m.isDark)
+		// Propagate theme to current screen
+		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
+			m.current = setter.SetStyles(m.isDark)
 		}
 		return m, nil
 
-	case nav.ReplaceMsg:
-		if len(m.screens) > 0 {
-			s := msg.Screen
-			if cmd := s.Init(); cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-			if t, ok := s.(nav.Themeable); ok {
-				t.SetTheme(m.isDark)
-			}
-			s, cmd := s.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
-			cmds = append(cmds, cmd)
-			m.screens[len(m.screens)-1] = s
+	case tea.KeyPressMsg:
+		if key.Matches(msg, m.keys.Quit) {
+			return m, tea.Quit
 		}
-		return m, tea.Batch(cmds...)
 
-	case screens.SettingsAppliedMsg:
-		// Settings were applied - log them and optionally update app config
-		applogger.Debug().Msgf("Settings applied: %+v", msg.Data)
-		// Pop the settings screen after successful submission
-		if len(m.screens) > 1 {
-			m.screens = m.screens[:len(m.screens)-1]
+	case NavigateMsg:
+		// Push current screen to stack and navigate to new screen
+		m.stack.Push(m.current)
+		m.current = msg.Screen
+		// Propagate width, height, and theme to new screen
+		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
+			m.current = setter.SetWidth(m.width)
 		}
+		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
+			m.current = setter.SetHeight(m.bodyHeight())
+		}
+		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
+			m.current = setter.SetStyles(m.isDark)
+		}
+		return m, m.current.Init()
+
+	case menu.SelectionMsg:
+		switch msg.Item.ScreenID() {
+		case "settings":
+			return m.Update(NavigateMsg{Screen: screens.NewSettings(m.cfg)})
+		default:
+			detail := screens.NewDetail(
+				msg.Item.Title(), msg.Item.Description(), msg.Item.ScreenID(),
+			)
+			return m.Update(NavigateMsg{Screen: detail})
+		}
+
+	case screens.SettingsSavedMsg:
+		m.cfg = msg.Cfg
+		var saveCmd tea.Cmd
+		if m.configPath != "" {
+			if err := config.Save(&m.cfg, m.configPath); err != nil {
+				saveCmd = setStatus("Save failed: "+err.Error(), 5*time.Second)
+			} else {
+				saveCmd = setStatus("Settings saved", 3*time.Second)
+			}
+		} else {
+			saveCmd = setStatus("Settings applied (no config file)", 3*time.Second)
+		}
+		if m.stack.Len() > 0 {
+			m.current = m.stack.Pop()
+		}
+		return m, saveCmd
+
+	case screens.BackMsg:
+		if m.stack.Len() > 0 {
+			m.current = m.stack.Pop()
+		}
+		return m, nil
+
+	case statusMsg:
+		m.status = msg.text
+		return m, nil
+
+	case clearStatusMsg:
+		m.status = "Ready"
 		return m, nil
 	}
 
-	// Delegate to active screen
-	if len(m.screens) > 0 {
-		top := m.screens[len(m.screens)-1]
-		updated, cmd := top.Update(msg)
-		m.screens[len(m.screens)-1] = updated
-		cmds = append(cmds, cmd)
+	// Delegate to current screen
+	var cmd tea.Cmd
+	updated, cmd := m.current.Update(msg)
+	if s, ok := updated.(screens.Screen); ok {
+		m.current = s
 	}
-
-	return m, tea.Batch(cmds...)
+	return m, cmd
 }
 
-// View renders the current model state as a tea.View.
-func (m Model) View() tea.View {
-	if m.quitting {
+// View renders the root model.
+func (m rootModel) View() tea.View {
+	if !m.ready {
 		return tea.NewView("")
 	}
 
-	var content string
-	if len(m.screens) > 0 {
-		content = m.screens[len(m.screens)-1].View()
-	}
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		m.headerView(),
+		m.styles.Body.Render(m.current.Body()),
+		m.helpView(),
+		m.footerView(),
+	)
 
-	v := tea.NewView(content)
-	v.AltScreen = m.altScreen   // from cfg.UI.AltScreen
-	v.WindowTitle = m.windowTitle // from cfg.App.Title
-	if m.mouseEnabled {          // from cfg.UI.MouseEnabled
-		v.MouseMode = tea.MouseModeCellMotion
-	}
-	return v
+	return tea.NewView(m.styles.App.Render(content))
 }
 
-// Run starts the BubbleTea program with the given model.
-func Run(m Model) error {
-	applogger.Info().Msg("Starting BubbleTea program")
+// headerView renders the header with the banner.
+func (m rootModel) headerView() string {
+	return m.styles.Header.Render(m.banner)
+}
 
-	p := tea.NewProgram(m)
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("running program: %w", err)
+// helpView renders the persistent help box showing global and screen-specific keybindings.
+func (m rootModel) helpView() string {
+	combined := m.combinedKeys()
+	return m.styles.Help.Render(m.help.View(combined))
+}
+
+// combinedKeys returns a key map that combines global keys with screen-specific keys.
+func (m rootModel) combinedKeys() combinedKeyMap {
+	return combinedKeyMap{
+		global: m.keys,
+		screen: m.current,
 	}
+}
 
-	applogger.Info().Msg("Program exited successfully")
-	return nil
+// combinedKeyMap combines global and screen-specific key bindings.
+type combinedKeyMap struct {
+	global keys.GlobalKeyMap
+	screen screens.Screen
+}
+
+// ShortHelp returns combined short help bindings.
+func (c combinedKeyMap) ShortHelp() []key.Binding {
+	bindings := c.global.ShortHelp()
+	if kb, ok := c.screen.(screens.KeyBinder); ok {
+		bindings = append(bindings, kb.ShortHelp()...)
+	}
+	return bindings
+}
+
+// FullHelp returns combined full help bindings.
+func (c combinedKeyMap) FullHelp() [][]key.Binding {
+	groups := c.global.FullHelp()
+	if kb, ok := c.screen.(screens.KeyBinder); ok {
+		groups = append(groups, kb.FullHelp()...)
+	}
+	return groups
+}
+
+// bodyHeight estimates the available height for the body content area.
+// It subtracts the header, help, and footer chrome from the terminal height.
+func (m rootModel) bodyHeight() int {
+	if m.height == 0 {
+		return 0
+	}
+	header := lipgloss.Height(m.headerView())
+	helpH := lipgloss.Height(m.helpView())
+	footer := lipgloss.Height(m.footerView())
+	body := m.height - header - helpH - footer
+	if body < 1 {
+		body = 1
+	}
+	return body
+}
+
+// footerView renders the status bar footer.
+func (m rootModel) footerView() string {
+	left := m.styles.StatusLeft.Render(" " + m.status + " ")
+	right := m.styles.StatusRight.Render(" v" + m.cfg.App.Version + " ")
+
+	// Account for footer border (2) and padding (1)
+	innerWidth := m.styles.MaxWidth - 3
+
+	gap := lipgloss.NewStyle().
+		Width(innerWidth - lipgloss.Width(left) - lipgloss.Width(right)).
+		Render("")
+	footerContent := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
+	return m.styles.Footer.Render(footerContent)
 }

@@ -5,6 +5,7 @@ description: >-
   Use when working with the figlet-go package, creating ASCII art output, rendering
   animated ASCII art, or integrating FIGlet functionality into Go CLI tools.
   Covers rendering, fonts, colors, animations, and configuration.
+allowed-tools: Read, Grep, Bash(go doc *)
 ---
 
 # figlet-go Skill

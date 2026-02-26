@@ -1,53 +1,34 @@
-// Package theme provides Huh form integration for the application theme.
 package theme
 
 import (
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 )
 
-// HuhThemeFunc returns a Huh theme that matches the application's visual style.
-// The theme function uses the isDark parameter provided by Huh, ensuring colors
-// stay in sync even if the terminal background changes.
-//
-// CRITICAL: This function creates its own ThemePalette using Huh's isDark parameter
-// rather than using a cached Theme. This ensures colors stay synchronized even if
-// the terminal background changes after the application starts.
-//
-// Usage: form.WithTheme(theme.HuhThemeFunc())
-func HuhThemeFunc() huh.Theme {
+// HuhTheme returns a huh.Theme that matches the application palette.
+// Uses huh.ThemeFunc so huh drives isDark on every View() call.
+func HuhTheme() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
-		// Create palette using Huh's isDark parameter (not from cached Theme)
 		p := NewPalette(isDark)
-
-		// Start with Charm's default theme as base
 		s := huh.ThemeCharm(isDark)
 
-		// Apply app's green theme to titles - ALL colors from palette
-		s.Group.Title = s.Group.Title.
-			Foreground(p.PrimaryFg). // From palette, not hardcoded
-			Background(p.Primary)    // From palette, not hardcoded
+		s.Group.Title = s.Group.Title.Foreground(p.Accent).Bold(true)
+		s.Group.Description = s.Group.Description.Foreground(p.Muted)
 
-		// Match status messages to app theme
-		s.Focused.Description = s.Focused.Description.
-			Foreground(p.Primary)
+		s.Focused.Base = s.Focused.Base.BorderForeground(p.Accent)
+		s.Focused.Title = s.Focused.Title.Foreground(p.Accent)
+		s.Focused.Description = s.Focused.Description.Foreground(p.Muted)
+		s.Focused.SelectSelector = s.Focused.SelectSelector.Foreground(p.AccentHover)
+		s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(p.AccentHover)
+		s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(p.AccentHover)
+		s.Focused.FocusedButton = s.Focused.FocusedButton.Background(p.Accent).Foreground(p.Inverse)
+		s.Focused.TextInput.Cursor = s.Focused.TextInput.Cursor.Foreground(p.AccentHover)
+		s.Focused.TextInput.Prompt = s.Focused.TextInput.Prompt.Foreground(p.Accent)
+		s.Focused.ErrorMessage = s.Focused.ErrorMessage.Foreground(p.Error)
+		s.Focused.ErrorIndicator = s.Focused.ErrorIndicator.Foreground(p.Error)
 
-		// Remove borders for cleaner look
-		s.Form.Base = s.Form.Base.
-			BorderTop(false).BorderRight(false).
-			BorderBottom(false).BorderLeft(false)
-		s.Group.Base = s.Group.Base.
-			BorderTop(false).BorderRight(false).
-			BorderBottom(false).BorderLeft(false)
-		s.Focused.Base = s.Focused.Base.
-			BorderTop(false).BorderRight(false).
-			BorderBottom(false).BorderLeft(false)
-		s.Blurred.Base = s.Blurred.Base.
-			BorderTop(false).BorderRight(false).
-			BorderBottom(false).BorderLeft(false)
-
-		// Increase spacing between options
-		s.Focused.Option = s.Focused.Option.Margin(2, 0)
-		s.Blurred.Option = s.Blurred.Option.Margin(2, 0)
+		s.Blurred = s.Focused
+		s.Blurred.Base = s.Focused.Base.BorderStyle(lipgloss.HiddenBorder())
 
 		return s
 	})

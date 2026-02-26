@@ -1,243 +1,241 @@
-// Package screens provides the individual screen implementations for the application.
 package screens
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
 	tea "charm.land/bubbletea/v2"
 
-	"scaffold/internal/ui/nav"
+	"scaffold/config"
+	"scaffold/internal/ui/theme"
 )
 
-// SettingsData holds form data for the settings screen.
-type SettingsData struct {
-	Category       string  // "basic", "advanced", or "developer"
-	Username       string
-	Email          string
-	LogLevel       string
-	EnableDebug    bool
-	ApiEndpoint    string
-	MaxConnections int
+// reflectAccessor bridges reflect.Value to huh.Accessor[T].
+type reflectAccessor[T any] struct {
+	v reflect.Value
 }
 
-// SettingsAppliedMsg is emitted when settings are successfully submitted.
-type SettingsAppliedMsg struct {
-	Data SettingsData
+func (a *reflectAccessor[T]) Get() T {
+	return a.v.Interface().(T)
 }
 
-// SettingsScreen displays a dynamic settings form that reacts to user choices.
-// It demonstrates Huh's dynamic form capabilities using Func variants.
-type SettingsScreen struct {
-	*FormScreen
-	data SettingsData
+func (a *reflectAccessor[T]) Set(val T) {
+	a.v.Set(reflect.ValueOf(val))
 }
 
-// NewSettingsScreen creates a settings form with dynamic fields
-// that react to earlier answers using Func variants.
-func NewSettingsScreen(isDark bool, appName string) *SettingsScreen {
-	data := SettingsData{
-		Category:    "basic",
-		LogLevel:    "info",
+// settingsKeyMap defines help-visible keybindings for the settings form.
+type settingsKeyMap struct {
+	Up     key.Binding
+	Down   key.Binding
+	Submit key.Binding
+}
+
+func defaultSettingsKeyMap() settingsKeyMap {
+	return settingsKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("up", "shift+tab"),
+			key.WithHelp("↑/shift+tab", "prev"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down", "tab"),
+			key.WithHelp("↓/tab", "next"),
+		),
+		Submit: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "submit"),
+		),
 	}
+}
 
-	// formBuilder is a function that can rebuild the form when needed
-	formBuilder := func() *huh.Form {
-		return huh.NewForm(
-			// ===== PAGE 1: Introduction =====
-			huh.NewGroup(
-				huh.NewNote().
-					Title("Settings").
-					Description("Configure your application preferences.\nChoose a category to see relevant options.").
-					Next(true).
-					NextLabel("Begin"),
-			),
+// Settings is the settings screen backed by a dynamic huh form.
+type Settings struct {
+	cfg    *config.Config
+	form   *huh.Form
+	groups []config.GroupMeta
+	keys   settingsKeyMap
+	width  int
+	height int
+	isDark bool
+}
 
-			// ===== PAGE 2: Category Selection =====
-			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("Category").
-					Description("Choose settings category").
-					Options(
-						huh.NewOption("Basic", "basic"),
-						huh.NewOption("Advanced", "advanced"),
-						huh.NewOption("Developer", "developer"),
-					).
-					Value(&data.Category),
-			),
-
-			// ===== PAGE 3: Basic Settings (shown for all) =====
-			huh.NewGroup(
-				// Dynamic title based on category
-				huh.NewInput().
-					TitleFunc(func() string {
-						if data.Category == "developer" {
-							return "Developer Username"
-						}
-						return "Username"
-					}, &data.Category).
-					DescriptionFunc(func() string {
-						if data.Category == "developer" {
-							return "Your developer handle (3+ chars)"
-						}
-						return "Your display name"
-					}, &data.Category).
-					Validate(func(s string) error {
-						if len(s) < 3 {
-							return fmt.Errorf("must be at least 3 characters")
-						}
-						return nil
-					}).
-					Value(&data.Username),
-
-				// Email field - only for basic/advanced categories
-				huh.NewInput().
-					Title("Email").
-					Placeholder("user@example.com").
-					Validate(func(s string) error {
-						if s != "" && !strings.Contains(s, "@") {
-							return fmt.Errorf("invalid email format")
-						}
-						return nil
-					}).
-					Value(&data.Email),
-			).WithHideFunc(func() bool {
-				// Hide this group for developer category
-				return data.Category == "developer"
-			}),
-
-			// ===== PAGE 4: Category-Specific Settings =====
-			// This group's content changes dynamically based on category
-			huh.NewGroup(
-				// Log level - always shown but options change
-				huh.NewSelect[string]().
-					TitleFunc(func() string {
-						if data.Category == "developer" {
-							return "Verbosity"
-						}
-						return "Log Level"
-					}, &data.Category).
-					OptionsFunc(func() []huh.Option[string] {
-						if data.Category == "developer" {
-							// More options for developers
-							return []huh.Option[string]{
-								huh.NewOption("Trace", "trace"),
-								huh.NewOption("Debug", "debug"),
-								huh.NewOption("Info", "info").Selected(true),
-								huh.NewOption("Warning", "warn"),
-								huh.NewOption("Error", "error"),
-							}
-						}
-						// Simplified options for users
-						return []huh.Option[string]{
-							huh.NewOption("Normal", "info").Selected(true),
-							huh.NewOption("Errors Only", "error"),
-						}
-					}, &data.Category).
-					Value(&data.LogLevel),
-
-				// Debug/diagnostics toggle - description adapts
-				huh.NewConfirm().
-					TitleFunc(func() string {
-						if data.Category == "developer" {
-							return "Enable Debug Mode?"
-						}
-						return "Show Diagnostics?"
-					}, &data.Category).
-					DescriptionFunc(func() string {
-						if data.Category == "developer" {
-							return "This will show detailed stack traces and timing info"
-						}
-						return "Display additional diagnostic information"
-					}, &data.Category).
-					Value(&data.EnableDebug),
-			),
-
-			// ===== PAGE 5: Advanced/Developer Settings =====
-			// This entire group is hidden for "basic" category
-			huh.NewGroup(
-				huh.NewInput().
-					Title("API Endpoint").
-					Description("Custom API server URL").
-					Placeholder("https://api.example.com").
-					Value(&data.ApiEndpoint),
-
-				huh.NewSelect[int]().
-					Title("Max Connections").
-					Options(
-						huh.NewOption("Low (5)", 5),
-						huh.NewOption("Medium (10)", 10).Selected(true),
-						huh.NewOption("High (20)", 20),
-						huh.NewOption("Unlimited (0)", 0),
-					).
-					Value(&data.MaxConnections),
-			).WithHideFunc(func() bool {
-				// Hide this group for basic category
-				return data.Category == "basic"
-			}),
-
-			// ===== PAGE 6: Confirmation =====
-			huh.NewGroup(
-				huh.NewNote().
-					TitleFunc(func() string {
-						return strings.ToUpper(data.Category) + " Settings Ready"
-					}, &data.Category).
-					DescriptionFunc(func() string {
-						var parts []string
-						parts = append(parts, fmt.Sprintf("* Username: %s", data.Username))
-						if data.Category != "developer" && data.Email != "" {
-							parts = append(parts, fmt.Sprintf("* Email: %s", data.Email))
-						}
-						parts = append(parts, fmt.Sprintf("* Log Level: %s", data.LogLevel))
-						if data.EnableDebug {
-							parts = append(parts, "* Debug: enabled")
-						}
-						if data.Category != "basic" {
-							parts = append(parts, fmt.Sprintf("* API: %s", data.ApiEndpoint))
-							parts = append(parts, fmt.Sprintf("* Connections: %d", data.MaxConnections))
-						}
-						return strings.Join(parts, "\n")
-					}, &data.Category).
-					Next(true).
-					NextLabel("Apply Settings"),
-			),
-		).WithShowHelp(true).WithShowErrors(true)
+// NewSettings creates a Settings screen from a config snapshot.
+// The config is value-copied so the form edits a working copy.
+func NewSettings(cfg config.Config) Settings {
+	cfgCopy := cfg
+	s := Settings{
+		cfg:  &cfgCopy,
+		keys: defaultSettingsKeyMap(),
 	}
+	s.groups = config.Schema(s.cfg)
 
-	onSubmit := func() tea.Cmd {
-		return func() tea.Msg {
-			return SettingsAppliedMsg{Data: data}
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
+
+	s.form = buildForm(s.groups).
+		WithTheme(theme.HuhTheme()).
+		WithKeyMap(km).
+		WithShowHelp(false)
+	return s
+}
+
+// RequiredHeight returns the minimum height needed to display the form.
+func (s Settings) RequiredHeight() int {
+	const (
+		fieldHeight  = 3
+		groupHeader  = 2
+		submitHeight = 2
+	)
+
+	total := submitHeight
+	for _, g := range s.groups {
+		total += groupHeader
+		total += len(g.Fields) * fieldHeight
+	}
+	return total
+}
+
+// SetWidth sets the screen width.
+func (s Settings) SetWidth(w int) Screen {
+	s.width = w
+	s.form = s.form.WithWidth(w)
+	return s
+}
+
+// SetHeight sets the available body height for scrolling.
+func (s Settings) SetHeight(h int) Screen {
+	s.height = h
+	if h > 0 {
+		s.form = s.form.WithHeight(h)
+	}
+	return s
+}
+
+// SetStyles sets the screen styles based on dark/light mode.
+func (s Settings) SetStyles(isDark bool) Screen {
+	s.isDark = isDark
+	return s
+}
+
+// Init initializes the settings form.
+func (s Settings) Init() tea.Cmd {
+	return s.form.Init()
+}
+
+// Update handles messages for the settings screen.
+func (s Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		s.width = ws.Width
+		s.form = s.form.WithWidth(s.width)
+		if ws.Height > 0 {
+			s.height = ws.Height
+			s.form = s.form.WithHeight(s.height)
 		}
 	}
 
-	onAbort := func() tea.Cmd {
-		return nav.Pop()
+	// Handle Enter key to submit from any field
+	if s.form.State == huh.StateNormal {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+			if keyMsg.String() == "enter" {
+				// Submit the form with Enter from any field
+				// Update the form one last time to capture current field values
+				form, formCmd := s.form.Update(msg)
+				if f, ok := form.(*huh.Form); ok {
+					s.form = f
+				}
+				// Trigger completion and save
+				saved := *s.cfg
+				return s, tea.Sequence(formCmd, func() tea.Msg {
+					return SettingsSavedMsg{Cfg: saved}
+				})
+			}
+		}
 	}
 
-	fs := newFormScreenWithBuilder(formBuilder, isDark, appName, onSubmit, onAbort, 0)
-
-	return &SettingsScreen{
-		FormScreen: fs,
-		data:       data,
+	form, cmd := s.form.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		s.form = f
 	}
-}
 
-// Update handles incoming messages and returns an updated screen and command.
-func (s *SettingsScreen) Update(msg tea.Msg) (nav.Screen, tea.Cmd) {
-	// Delegate to FormScreen
-	screen, cmd := s.FormScreen.Update(msg)
-
-	// Update our reference if the FormScreen changed
-	if fs, ok := screen.(*FormScreen); ok {
-		s.FormScreen = fs
+	switch s.form.State {
+	case huh.StateCompleted:
+		saved := *s.cfg
+		return s, func() tea.Msg { return SettingsSavedMsg{Cfg: saved} }
+	case huh.StateAborted:
+		return s, func() tea.Msg { return BackMsg{} }
 	}
 
 	return s, cmd
 }
 
-// SetTheme updates the screen's theme based on the terminal background.
-// Implements nav.Themeable.
-func (s *SettingsScreen) SetTheme(isDark bool) {
-	s.FormScreen.SetTheme(isDark)
+// View renders the settings screen.
+func (s Settings) View() tea.View {
+	return tea.NewView(s.Body())
+}
+
+// Body returns the body content for layout composition.
+func (s Settings) Body() string {
+	if s.form.State != huh.StateNormal {
+		return "Applying settings..."
+	}
+	return s.form.View()
+}
+
+// ShortHelp returns short help key bindings for the global help bar.
+func (s Settings) ShortHelp() []key.Binding {
+	return []key.Binding{s.keys.Up, s.keys.Down, s.keys.Submit}
+}
+
+// FullHelp returns full help key bindings for the global help bar.
+func (s Settings) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{s.keys.Up, s.keys.Down, s.keys.Submit}}
+}
+
+// buildForm constructs a huh.Form from schema groups.
+func buildForm(groups []config.GroupMeta) *huh.Form {
+	huhGroups := make([]*huh.Group, 0, len(groups))
+	for _, g := range groups {
+		fields := make([]huh.Field, 0, len(g.Fields))
+		for _, fm := range g.Fields {
+			if f := buildField(fm); f != nil {
+				fields = append(fields, f)
+			}
+		}
+		if len(fields) > 0 {
+			huhGroups = append(huhGroups,
+				huh.NewGroup(fields...).Title(g.Label),
+			)
+		}
+	}
+	return huh.NewForm(huhGroups...)
+}
+
+// buildField maps a single FieldMeta to a huh.Field.
+func buildField(m config.FieldMeta) huh.Field {
+	switch m.Kind {
+	case config.FieldSelect:
+		opts := make([]huh.Option[string], len(m.Options))
+		for i, o := range m.Options {
+			opts[i] = huh.NewOption(strings.ToUpper(o[:1])+o[1:], o)
+		}
+		return huh.NewSelect[string]().
+			Key(m.Key).Title(m.Label).Description(m.Desc).
+			Options(opts...).
+			Accessor(&reflectAccessor[string]{v: m.Value})
+	case config.FieldConfirm:
+		return huh.NewConfirm().
+			Key(m.Key).Title(m.Label).Description(m.Desc).
+			Affirmative("Yes").Negative("No").
+			Accessor(&reflectAccessor[bool]{v: m.Value})
+	case config.FieldReadOnly:
+		return huh.NewNote().
+			Title(m.Label).
+			Description(fmt.Sprint(m.Value.Interface()))
+	default: // FieldInput
+		return huh.NewInput().
+			Key(m.Key).Title(m.Label).Description(m.Desc).
+			Accessor(&reflectAccessor[string]{v: m.Value})
+	}
 }

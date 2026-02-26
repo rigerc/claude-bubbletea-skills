@@ -1,6 +1,7 @@
 ---
 name: zerolog
 description: Generates, explains, and debugs structured logging code using zerolog (github.com/rs/zerolog) for Go. Use when writing zero-allocation JSON loggers, configuring log levels, adding structured fields, setting up console/file/multi writers, implementing hooks, using context-based logging, sampling high-volume logs, or logging errors with stack traces.
+allowed-tools: Read, Grep, Bash(go doc *)
 ---
 
 # Zerolog - Zero Allocation JSON Logger

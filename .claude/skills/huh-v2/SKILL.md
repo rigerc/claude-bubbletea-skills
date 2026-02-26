@@ -10,6 +10,7 @@ description: >-
   variants, BubbleTea integration, themes, layouts, accessibility mode, keymaps,
   and the standalone spinner package. Import path: charm.land/huh/v2.
 argument-hint: "[describe the form or field you need]"
+allowed-tools: Read, Grep, Bash(go doc *)
 metadata:
   category: go-tui
   version: "2.0"

@@ -1,6 +1,12 @@
-# koanf Configuration Management Skill
-
-Generates, explains, and debugs configuration management code using the koanf Go library (github.com/knadh/koanf/v2). Use when building Go applications that need to load configuration from files (YAML, TOML, JSON, HCL, dotenv), environment variables, command-line flags, remote stores (Vault, Consul, etcd, S3, AWS AppConfig/ParameterStore), or in-memory sources. Covers provider chaining, config merging, struct unmarshaling, file watching, default values, custom parsers/providers, and migration from viper.
+---
+name: koanf
+description: >-
+  Generates, explains, and debugs configuration management code using the koanf Go library (github.com/knadh/koanf/v2). Use when building Go applications that need to load configuration from files (YAML, TOML, JSON, HCL, dotenv), environment variables, command-line flags, remote stores (Vault, Consul, etcd, S3, AWS AppConfig/ParameterStore), or in-memory sources. Covers provider chaining, config merging, struct unmarshaling, file watching, default values, custom parsers/providers, and migration from viper.
+allowed-tools: Read, Write, Edit, Bash(go *)
+metadata:
+  category: go-cli
+  version: "2.0"
+---
 
 ## Overview
 
