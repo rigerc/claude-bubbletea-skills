@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"time"
-
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -13,26 +11,13 @@ import (
 	"scaffold/internal/ui/keys"
 	"scaffold/internal/ui/menu"
 	"scaffold/internal/ui/screens"
+	"scaffold/internal/ui/status"
 	"scaffold/internal/ui/theme"
 )
 
 // NavigateMsg is a message to navigate to a new screen.
 type NavigateMsg struct {
 	Screen screens.Screen
-}
-
-// statusMsg is sent to update the footer status text.
-type statusMsg struct{ text string }
-
-// clearStatusMsg is sent after a delay to reset the footer.
-type clearStatusMsg struct{}
-
-// setStatus returns a Cmd that sets a timed status message.
-func setStatus(text string, duration time.Duration) tea.Cmd {
-	return tea.Batch(
-		func() tea.Msg { return statusMsg{text: text} },
-		tea.Tick(duration, func(time.Time) tea.Msg { return clearStatusMsg{} }),
-	)
 }
 
 // screenStack holds the navigation history.
@@ -71,19 +56,20 @@ func (s *screenStack) Len() int {
 
 // rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
 type rootModel struct {
-	cfg        config.Config
-	configPath string // empty = no persistent save
-	status     string // footer status text
-	width      int
-	height     int
-	banner     string
-	isDark     bool
-	ready      bool
-	styles     theme.Styles
-	keys       keys.GlobalKeyMap
-	help       help.Model
-	current    screens.Screen
-	stack      screenStack
+	cfg          config.Config
+	configPath   string // empty = no persistent save
+	status       status.State
+	statusStyles status.Styles
+	width        int
+	height       int
+	banner       string
+	themeMgr     *theme.Manager
+	ready        bool
+	styles       theme.Styles
+	keys         keys.GlobalKeyMap
+	help         help.Model
+	current      screens.Screen
+	stack        screenStack
 }
 
 // newRootModel creates a new root model.
@@ -91,7 +77,8 @@ func newRootModel(cfg config.Config, configPath string) rootModel {
 	return rootModel{
 		cfg:        cfg,
 		configPath: configPath,
-		status:     "Ready",
+		status:     status.State{Text: "Ready", Kind: status.KindNone},
+		themeMgr:   theme.GetManager(),
 		current:    screens.NewHome(),
 		keys:       keys.DefaultGlobalKeyMap(),
 		help:       help.New(),
@@ -100,7 +87,10 @@ func newRootModel(cfg config.Config, configPath string) rootModel {
 
 // Init initializes the root model.
 func (m rootModel) Init() tea.Cmd {
-	return tea.RequestBackgroundColor
+	return tea.Batch(
+		tea.RequestBackgroundColor,
+		m.themeMgr.Init(m.cfg.UI.ThemeName, false, m.width),
+	)
 }
 
 // Update handles messages for the root model.
@@ -110,21 +100,6 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-		m.styles = theme.New(m.isDark, m.width)
-		m.help.SetWidth(m.styles.MaxWidth)
-
-		// Render banner once with the window width
-		b, err := banner.Render(banner.Config{
-			Text:          m.cfg.App.Name,
-			Font:          "larry3d",
-			Width:         m.width - 10, // Account for padding
-			Justification: 0,            // Left aligned
-			Color:         theme.AccentHex(),
-		})
-		if err != nil {
-			b = m.cfg.App.Name
-		}
-		m.banner = b
 
 		// Propagate width and height to current screen
 		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
@@ -133,15 +108,27 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
 			m.current = setter.SetHeight(m.bodyHeight())
 		}
-		return m, nil
+		return m, m.themeMgr.SetWidth(m.width)
 
 	case tea.BackgroundColorMsg:
-		m.isDark = msg.IsDark()
-		m.styles = theme.New(m.isDark, m.width)
-		m.help.Styles = help.DefaultStyles(m.isDark)
-		// Propagate theme to current screen
-		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
-			m.current = setter.SetStyles(m.isDark)
+		isDark := msg.IsDark()
+		m.help.Styles = help.DefaultStyles(isDark)
+		return m, m.themeMgr.SetDarkMode(isDark)
+
+	case theme.ThemeChangedMsg:
+		// Apply to self
+		m.styles = theme.NewFromPalette(msg.State.Palette, msg.State.Width)
+		m.statusStyles = status.NewStyles(msg.State.Palette)
+		m.help.SetWidth(m.styles.MaxWidth)
+
+		// Render/re-render banner with current theme palette
+		if m.cfg.UI.ShowBanner {
+			m.renderBanner()
+		}
+
+		// Apply to current screen
+		if t, ok := m.current.(theme.Themeable); ok {
+			t.ApplyTheme(msg.State)
 		}
 		return m, nil
 
@@ -154,15 +141,16 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Push current screen to stack and navigate to new screen
 		m.stack.Push(m.current)
 		m.current = msg.Screen
-		// Propagate width, height, and theme to new screen
+		// Propagate width and height to new screen
 		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
 			m.current = setter.SetWidth(m.width)
 		}
 		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
 			m.current = setter.SetHeight(m.bodyHeight())
 		}
-		if setter, ok := m.current.(interface{ SetStyles(bool) screens.Screen }); ok {
-			m.current = setter.SetStyles(m.isDark)
+		// Apply current theme to new screen
+		if t, ok := m.current.(theme.Themeable); ok {
+			t.ApplyTheme(m.themeMgr.State())
 		}
 		return m, m.current.Init()
 
@@ -178,17 +166,36 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case screens.SettingsSavedMsg:
+		themeChanged := m.cfg.UI.ThemeName != msg.Cfg.UI.ThemeName
 		m.cfg = msg.Cfg
+
+		// Clear banner if disabled
+		if !msg.Cfg.UI.ShowBanner {
+			m.banner = ""
+		}
+
 		var saveCmd tea.Cmd
 		if m.configPath != "" {
 			if err := config.Save(&m.cfg, m.configPath); err != nil {
-				saveCmd = setStatus("Save failed: "+err.Error(), 5*time.Second)
+				saveCmd = status.SetError("Save failed: "+err.Error(), 0)
 			} else {
-				saveCmd = setStatus("Settings saved", 3*time.Second)
+				saveCmd = status.SetSuccess("Settings saved", 0)
 			}
 		} else {
-			saveCmd = setStatus("Settings applied (no config file)", 3*time.Second)
+			saveCmd = status.SetInfo("Settings applied (no config file)", 0)
 		}
+
+		// Handle theme change via manager
+		if themeChanged {
+			if m.stack.Len() > 0 {
+				m.current = m.stack.Pop()
+			}
+			return m, tea.Batch(
+				saveCmd,
+				m.themeMgr.SetThemeName(m.cfg.UI.ThemeName),
+			)
+		}
+
 		if m.stack.Len() > 0 {
 			m.current = m.stack.Pop()
 		}
@@ -200,12 +207,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case statusMsg:
-		m.status = msg.text
+	case status.Msg:
+		m.status = status.State{Text: msg.Text, Kind: msg.Kind}
 		return m, nil
 
-	case clearStatusMsg:
-		m.status = "Ready"
+	case status.ClearMsg:
+		m.status = status.State{Text: "Ready", Kind: status.KindNone}
 		return m, nil
 	}
 
@@ -234,9 +241,42 @@ func (m rootModel) View() tea.View {
 	return tea.NewView(m.styles.App.Render(content))
 }
 
-// headerView renders the header with the banner.
+// renderBanner renders the ASCII art banner at its natural width and caches the result.
+// Using a large fixed width lets lipgloss.Width(m.banner) reflect the font's true width,
+// which headerView uses to decide whether the terminal is wide enough to display it.
+func (m *rootModel) renderBanner() {
+	state := m.themeMgr.State()
+	p := state.Palette
+	if p.Primary == nil {
+		p = theme.NewPalette(m.cfg.UI.ThemeName, state.IsDark)
+	}
+	b, err := banner.Render(banner.Config{
+		Text:          m.cfg.App.Title,
+		Font:          "larry3d",
+		Width:         100,
+		Justification: 0,
+		Gradient:      banner.GradientThemed(p.Primary, p.Secondary),
+	})
+	if err != nil {
+		b = m.cfg.App.Title
+	}
+	m.banner = b
+}
+
+// headerView renders the header with either the ASCII banner or a styled plain-text title.
+// The ASCII banner is shown only when ShowBanner is enabled, the banner has been rendered,
+// and the terminal is wide enough to display it. In all other cases — including when
+// ShowBanner is disabled or the terminal is too narrow — the plain-text title is shown.
 func (m rootModel) headerView() string {
-	return m.styles.Header.Render(m.banner)
+	if m.cfg.UI.ShowBanner && m.banner != "" && m.width > 0 && m.width >= lipgloss.Width(m.banner) {
+		return m.styles.Header.Render(m.banner)
+	}
+	return m.styles.Header.Render(m.plainTitleView())
+}
+
+// plainTitleView renders a styled plain-text title used when ShowBanner is off.
+func (m rootModel) plainTitleView() string {
+	return m.styles.PlainTitle.Render(m.cfg.App.Title)
 }
 
 // helpView renders the persistent help box showing global and screen-specific keybindings.
@@ -295,8 +335,12 @@ func (m rootModel) bodyHeight() int {
 
 // footerView renders the status bar footer.
 func (m rootModel) footerView() string {
-	left := m.styles.StatusLeft.Render(" " + m.status + " ")
-	right := m.styles.StatusRight.Render(" v" + m.cfg.App.Version + " ")
+	left := m.statusStyles.Render(m.status.Text, m.status.Kind)
+	rightContent := " v" + m.cfg.App.Version
+	if m.cfg.Debug {
+		rightContent += " [DEBUG]"
+	}
+	right := m.styles.StatusRight.Render(rightContent + " ")
 
 	// Account for footer border (2) and padding (1)
 	innerWidth := m.styles.MaxWidth - 3

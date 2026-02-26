@@ -2,10 +2,11 @@
 package menu
 
 import (
+	"scaffold/internal/ui/theme"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"scaffold/internal/ui/theme"
 )
 
 // Item represents a menu item.
@@ -78,13 +79,14 @@ type SelectionMsg struct {
 
 // Model is the menu component.
 type Model struct {
+	theme.ThemeAware
+
 	list     list.Model
 	delegate list.DefaultDelegate
 	keys     keyMap
-	ready    bool
-	width    int
-	height   int
-	isDark   bool
+	ready     bool
+	width     int
+	height    int
 }
 
 // New creates a new menu model.
@@ -114,9 +116,12 @@ func (m Model) SetItems(items []Item) Model {
 	if m.ready {
 		m.list.SetItems(listItems)
 	} else {
-		// Create delegate with theme styles if isDark is set
+		// Create delegate with theme styles
+		p := m.Palette()
+		if p.Primary == nil {
+			p = theme.NewPalette("default", false) // fallback
+		}
 		m.delegate = list.NewDefaultDelegate()
-		p := theme.NewPalette(m.isDark)
 		m.delegate.Styles = theme.ListItemStyles(p)
 
 		m.list = list.New(listItems, m.delegate, m.width, m.height)
@@ -125,6 +130,7 @@ func (m Model) SetItems(items []Item) Model {
 		m.list.SetShowStatusBar(false)
 		m.list.SetShowPagination(false)
 		m.list.SetShowFilter(false)
+		m.list.SetShowTitle(false)
 		m.list.SetShowHelp(false) // Hide list's help, use global help
 		m.list.DisableQuitKeybindings()
 		m.ready = true
@@ -132,15 +138,18 @@ func (m Model) SetItems(items []Item) Model {
 	return m
 }
 
-// SetStyles sets the menu styles based on dark/light mode.
-func (m Model) SetStyles(isDark bool) Model {
-	m.isDark = isDark
+// ApplyTheme implements theme.Themeable.
+func (m *Model) ApplyTheme(state theme.State) {
+	m.ApplyThemeState(state)
+
 	if m.ready {
-		p := theme.NewPalette(isDark)
+		p := state.Palette
 		m.list.Styles = theme.ListStyles(p)
+
+		m.delegate = list.NewDefaultDelegate()
 		m.delegate.Styles = theme.ListItemStyles(p)
+		m.list.SetDelegate(m.delegate)
 	}
-	return m
 }
 
 // Init initializes the menu.
@@ -228,7 +237,7 @@ func (m Model) RequiredHeight() int {
 	spacing := m.delegate.Spacing()
 
 	// Title area: title (1) + blank line (1)
-	const titleHeight = 2
+	const titleHeight = 0
 
 	// Calculate total: title + (items * height) + spacing between items
 	itemsHeight := count * itemHeight
@@ -237,5 +246,5 @@ func (m Model) RequiredHeight() int {
 		totalSpacing = 0
 	}
 
-	return titleHeight + itemsHeight + totalSpacing + 2
+	return titleHeight + itemsHeight + totalSpacing + 1
 }
