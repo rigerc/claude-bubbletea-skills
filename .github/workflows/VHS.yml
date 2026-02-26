@@ -1,24 +1,41 @@
-name: vhs
+name: 📼 VHS
 on:
   push:
     paths:
-      - vhs.tape
-  workflow_dispatch: 
+      - 'vhs.tape'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   vhs:
-    runs-on: ubuntu-latest
+    name: Create VHS
+    runs-on: macos-latest
+    if: ${{ github.repository == 'wxt-dev/wxt' }}
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: charmbracelet/vhs-action@v2.1.0
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          path: 'vhs.tape'
-      - uses: stefanzweifel/git-auto-commit-action@v4
+          ref: ${{ github.ref }}
+
+
+      - name: Record VHS
+        run: |
+          brew install ttyd ffmpeg
+          go install github.com/charmbracelet/vhs@517bcda0faf416728bcf6b7fe489eb0e2469d9b5 # v0.10.0
+          vhs vhs.tape
+
+      - name: Save recorded GIF
+        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          commit_message: Update generated VHS GIF
-          branch: main
-          commit_user_name: vhs-action 📼
-          commit_user_email: actions@github.com
-          commit_author: vhs-action 📼 <actions@github.com>
+          commit_message: 'docs: Update `wxt init` GIF'
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
+          commit_author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          # https://github.com/charmbracelet/vhs#output
           file_pattern: '*.gif'
