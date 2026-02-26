@@ -47,6 +47,10 @@ type UIConfig struct {
 
 	// ThemeName specifies the color theme to use.
 	ThemeName string `json:"themeName" mapstructure:"themeName" koanf:"themeName" cfg_label:"Color Theme" cfg_desc:"Visual theme for the application" cfg_options:"default,dark,light"`
+
+	// ShowBanner controls whether the ASCII art banner is shown in the header.
+	// When false, a styled plain-text title is rendered instead.
+	ShowBanner bool `json:"showBanner" mapstructure:"showBanner" koanf:"showBanner" cfg_label:"ASCII Banner" cfg_desc:"Show ASCII art banner in header"`
 }
 
 // AppConfig contains general application configuration.

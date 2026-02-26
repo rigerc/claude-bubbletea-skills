@@ -11,11 +11,12 @@ func DefaultConfig() *Config {
 		UI: UIConfig{
 			MouseEnabled: true,
 			ThemeName:    "default",
+			ShowBanner:   true,
 		},
 		App: AppConfig{
 			Name:    "scaffold",
 			Version: "1.0.0",
-			Title:   "BubbleTea Scaffold",
+			Title:   "Scaffold",
 		},
 	}
 }

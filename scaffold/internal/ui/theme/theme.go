@@ -12,8 +12,10 @@ import (
 // Palette defines semantic colors for the application theme.
 type Palette struct {
 	// Brand
-	Accent      color.Color // Zinc - primary brand (teal)
-	AccentHover color.Color // Turtle - hover state (cyan)
+	Accent          color.Color // Zinc - primary brand (teal)
+	AccentSecondary color.Color // Charple - secondary brand (purple)
+	AccentHover     color.Color // Turtle - hover state (cyan)
+	SubtlePrimary   color.Color // Guac - muted primary, unfocused primary items
 
 	// Foreground (adaptive)
 	Foreground color.Color // Primary text
@@ -35,8 +37,10 @@ func NewPalette(isDark bool) Palette {
 	ld := lipgloss.LightDark(isDark)
 
 	return Palette{
-		Accent:      charmtone.Zinc,
-		AccentHover: charmtone.Turtle,
+		Accent:          charmtone.Zinc,
+		AccentSecondary: charmtone.Charple,
+		AccentHover:     charmtone.Turtle,
+		SubtlePrimary:   charmtone.Guac,
 		Foreground:  ld(charmtone.Pepper, charmtone.Salt),
 		Muted:       ld(charmtone.Charcoal, charmtone.Ash),
 		Subtle:      ld(charmtone.Squid, charmtone.Oyster),
@@ -57,6 +61,7 @@ func AccentHex() string {
 type Styles struct {
 	App         lipgloss.Style
 	Header      lipgloss.Style
+	PlainTitle  lipgloss.Style
 	Body        lipgloss.Style
 	Help        lipgloss.Style
 	Footer      lipgloss.Style
@@ -75,8 +80,14 @@ func newStylesFromPalette(p Palette, width int) Styles {
 	return Styles{
 		MaxWidth: maxWidth,
 		App:      lipgloss.NewStyle().Width(maxWidth).Padding(0, 0),
-		Header:   lipgloss.NewStyle().Padding(5).PaddingBottom(1),
-		Body:     lipgloss.NewStyle().Padding(0, 3).Foreground(p.Foreground),
+		Header:   lipgloss.NewStyle().Padding(2).PaddingBottom(1),
+		PlainTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(p.Accent).
+			Border(lipgloss.NormalBorder(), false, false, true, false).
+			BorderForeground(p.AccentSecondary).
+			PaddingBottom(1),
+		Body: lipgloss.NewStyle().Padding(0, 3).Foreground(p.Foreground),
 		Help:     lipgloss.NewStyle().MarginTop(0).Padding(0, 3),
 		Footer: lipgloss.NewStyle().
 			MarginTop(1).
@@ -165,15 +176,15 @@ func ListItemStyles(p Palette) list.DefaultItemStyles {
 	s := list.NewDefaultItemStyles(false)
 
 	// Generate accent variant for unfocused items
-	accentNormal := lipgloss.Lighten(p.Accent, 0.70)
+	//accentNormal := lipgloss.Lighten(p.Accent, 0.70)
 
 	// Normal state (unfocused items)
-	s.NormalTitle = lipgloss.NewStyle().Foreground(accentNormal)
+	s.NormalTitle = lipgloss.NewStyle().Foreground(p.SubtlePrimary)
 	s.NormalDesc = lipgloss.NewStyle().Foreground(p.Muted)
 
 	// Selected state (focused item)
 	s.SelectedTitle = lipgloss.NewStyle().
-		Foreground(p.Accent).
+		Foreground(p.AccentHover).
 		Bold(true)
 	s.SelectedDesc = lipgloss.NewStyle().Foreground(p.Subtle)
 

@@ -113,18 +113,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.styles = theme.New(m.isDark, m.width)
 		m.help.SetWidth(m.styles.MaxWidth)
 
-		// Render banner once with the window width
-		b, err := banner.Render(banner.Config{
-			Text:          m.cfg.App.Name,
-			Font:          "larry3d",
-			Width:         m.width - 10, // Account for padding
-			Justification: 0,            // Left aligned
-			Color:         theme.AccentHex(),
-		})
-		if err != nil {
-			b = m.cfg.App.Name
+		// Render banner once (natural width; re-render not needed on resize)
+		if m.cfg.UI.ShowBanner && m.banner == "" {
+			m.renderBanner()
 		}
-		m.banner = b
 
 		// Propagate width and height to current screen
 		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
@@ -178,6 +170,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case screens.SettingsSavedMsg:
+		if msg.Cfg.UI.ShowBanner && m.banner == "" {
+			m.renderBanner()
+		} else if !msg.Cfg.UI.ShowBanner {
+			m.banner = "" // clear cached banner when ShowBanner is disabled
+		}
 		m.cfg = msg.Cfg
 		var saveCmd tea.Cmd
 		if m.configPath != "" {
@@ -234,9 +231,37 @@ func (m rootModel) View() tea.View {
 	return tea.NewView(m.styles.App.Render(content))
 }
 
-// headerView renders the header with the banner.
+// renderBanner renders the ASCII art banner at its natural width and caches the result.
+// Using a large fixed width lets lipgloss.Width(m.banner) reflect the font's true width,
+// which headerView uses to decide whether the terminal is wide enough to display it.
+func (m *rootModel) renderBanner() {
+	b, err := banner.Render(banner.Config{
+		Text:          m.cfg.App.Title,
+		Font:          "larry3d",
+		Width:         100,
+		Justification: 0,
+		Color:         theme.AccentHex(),
+	})
+	if err != nil {
+		b = m.cfg.App.Title
+	}
+	m.banner = b
+}
+
+// headerView renders the header with either the ASCII banner or a styled plain-text title.
+// The ASCII banner is shown only when ShowBanner is enabled, the banner has been rendered,
+// and the terminal is wide enough to display it. In all other cases — including when
+// ShowBanner is disabled or the terminal is too narrow — the plain-text title is shown.
 func (m rootModel) headerView() string {
-	return m.styles.Header.Render(m.banner)
+	if m.cfg.UI.ShowBanner && m.banner != "" && m.width > 0 && m.width >= lipgloss.Width(m.banner) {
+		return m.styles.Header.Render(m.banner)
+	}
+	return m.styles.Header.Render(m.plainTitleView())
+}
+
+// plainTitleView renders a styled plain-text title used when ShowBanner is off.
+func (m rootModel) plainTitleView() string {
+	return m.styles.PlainTitle.Render(m.cfg.App.Title)
 }
 
 // helpView renders the persistent help box showing global and screen-specific keybindings.

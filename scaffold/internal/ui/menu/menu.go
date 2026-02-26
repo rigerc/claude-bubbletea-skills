@@ -2,10 +2,11 @@
 package menu
 
 import (
+	"scaffold/internal/ui/theme"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"scaffold/internal/ui/theme"
 )
 
 // Item represents a menu item.
@@ -125,6 +126,7 @@ func (m Model) SetItems(items []Item) Model {
 		m.list.SetShowStatusBar(false)
 		m.list.SetShowPagination(false)
 		m.list.SetShowFilter(false)
+		m.list.SetShowTitle(false)
 		m.list.SetShowHelp(false) // Hide list's help, use global help
 		m.list.DisableQuitKeybindings()
 		m.ready = true
