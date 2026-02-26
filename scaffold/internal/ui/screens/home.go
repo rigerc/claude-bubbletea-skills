@@ -31,7 +31,7 @@ type Home struct {
 }
 
 // NewHome creates a new Home screen.
-func NewHome() Home {
+func NewHome() *Home {
 	m := menu.New()
 	m = m.SetItems([]menu.Item{
 		menu.NewItem("Dashboard", "View application dashboard", "dashboard"),
@@ -39,13 +39,13 @@ func NewHome() Home {
 		menu.NewItem("Profile", "Manage your profile", "profile"),
 		menu.NewItem("About", "About this application", "about"),
 	})
-	return Home{
+	return &Home{
 		menu: &m,
 	}
 }
 
 // SetWidth sets the screen width.
-func (h Home) SetWidth(w int) Screen {
+func (h *Home) SetWidth(w int) Screen {
 	h.width = w
 	// Calculate menu height dynamically based on number of items
 	height := h.menu.RequiredHeight()
@@ -63,33 +63,33 @@ func (h *Home) ApplyTheme(state theme.State) {
 }
 
 // Init initializes the home screen.
-func (h Home) Init() tea.Cmd {
+func (h *Home) Init() tea.Cmd {
 	return nil
 }
 
 // Update handles messages for the home screen.
-func (h Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (h *Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	*h.menu, cmd = h.menu.Update(msg)
 	return h, cmd
 }
 
 // View renders the home screen.
-func (h Home) View() tea.View {
+func (h *Home) View() tea.View {
 	return tea.NewView(h.Body())
 }
 
 // Body returns the body content for layout composition.
-func (h Home) Body() string {
+func (h *Home) Body() string {
 	return h.menu.View()
 }
 
 // ShortHelp returns short help key bindings for the home screen.
-func (h Home) ShortHelp() []key.Binding {
+func (h *Home) ShortHelp() []key.Binding {
 	return h.menu.Keys().ShortHelp()
 }
 
 // FullHelp returns full help key bindings for the home screen.
-func (h Home) FullHelp() [][]key.Binding {
+func (h *Home) FullHelp() [][]key.Binding {
 	return h.menu.Keys().FullHelp()
 }

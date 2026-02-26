@@ -64,9 +64,9 @@ type Settings struct {
 
 // NewSettings creates a Settings screen from a config snapshot.
 // The config is value-copied so the form edits a working copy.
-func NewSettings(cfg config.Config) Settings {
+func NewSettings(cfg config.Config) *Settings {
 	cfgCopy := cfg
-	s := Settings{
+	s := &Settings{
 		cfg:  &cfgCopy,
 		keys: defaultSettingsKeyMap(),
 	}
@@ -83,7 +83,7 @@ func NewSettings(cfg config.Config) Settings {
 }
 
 // RequiredHeight returns the minimum height needed to display the form.
-func (s Settings) RequiredHeight() int {
+func (s *Settings) RequiredHeight() int {
 	const (
 		fieldHeight  = 3
 		groupHeader  = 2
@@ -99,14 +99,14 @@ func (s Settings) RequiredHeight() int {
 }
 
 // SetWidth sets the screen width.
-func (s Settings) SetWidth(w int) Screen {
+func (s *Settings) SetWidth(w int) Screen {
 	s.width = w
 	s.form = s.form.WithWidth(w)
 	return s
 }
 
 // SetHeight sets the available body height for scrolling.
-func (s Settings) SetHeight(h int) Screen {
+func (s *Settings) SetHeight(h int) Screen {
 	s.height = h
 	if h > 0 {
 		s.form = s.form.WithHeight(h)
@@ -122,12 +122,12 @@ func (s *Settings) ApplyTheme(state theme.State) {
 }
 
 // Init initializes the settings form.
-func (s Settings) Init() tea.Cmd {
+func (s *Settings) Init() tea.Cmd {
 	return s.form.Init()
 }
 
 // Update handles messages for the settings screen.
-func (s Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		s.width = ws.Width
 		s.form = s.form.WithWidth(s.width)
@@ -173,12 +173,12 @@ func (s Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the settings screen.
-func (s Settings) View() tea.View {
+func (s *Settings) View() tea.View {
 	return tea.NewView(s.Body())
 }
 
 // Body returns the body content for layout composition.
-func (s Settings) Body() string {
+func (s *Settings) Body() string {
 	if s.form.State != huh.StateNormal {
 		return "Applying settings..."
 	}
@@ -186,12 +186,12 @@ func (s Settings) Body() string {
 }
 
 // ShortHelp returns short help key bindings for the global help bar.
-func (s Settings) ShortHelp() []key.Binding {
+func (s *Settings) ShortHelp() []key.Binding {
 	return []key.Binding{s.keys.Up, s.keys.Down, s.keys.Submit}
 }
 
 // FullHelp returns full help key bindings for the global help bar.
-func (s Settings) FullHelp() [][]key.Binding {
+func (s *Settings) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{s.keys.Up, s.keys.Down, s.keys.Submit}}
 }
 

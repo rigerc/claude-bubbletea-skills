@@ -20,8 +20,8 @@ type Detail struct {
 }
 
 // NewDetail creates a new Detail screen.
-func NewDetail(title, description, screenID string) Detail {
-	return Detail{
+func NewDetail(title, description, screenID string) *Detail {
+	return &Detail{
 		title:       title,
 		description: description,
 		screenID:    screenID,
@@ -29,7 +29,7 @@ func NewDetail(title, description, screenID string) Detail {
 }
 
 // SetWidth sets the screen width.
-func (d Detail) SetWidth(w int) Screen {
+func (d *Detail) SetWidth(w int) Screen {
 	d.width = w
 	return d
 }
@@ -41,12 +41,12 @@ func (d *Detail) ApplyTheme(state theme.State) {
 }
 
 // Init initializes the detail screen.
-func (d Detail) Init() tea.Cmd {
+func (d *Detail) Init() tea.Cmd {
 	return nil
 }
 
 // Update handles messages for the detail screen.
-func (d Detail) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (d *Detail) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "esc":
@@ -57,12 +57,12 @@ func (d Detail) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the detail screen.
-func (d Detail) View() tea.View {
+func (d *Detail) View() tea.View {
 	return tea.NewView(d.Body())
 }
 
 // Body returns the body content for layout composition.
-func (d Detail) Body() string {
+func (d *Detail) Body() string {
 	p := d.Palette()
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(p.Primary).MarginBottom(1)

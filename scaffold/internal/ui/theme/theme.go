@@ -237,7 +237,7 @@ type Styles struct {
 
 // newStylesFromPalette creates Styles from a Palette.
 func newStylesFromPalette(p Palette, width int) Styles {
-	maxWidth := width * 50 / 100
+	maxWidth := width * 70 / 100
 	if maxWidth < 40 {
 		maxWidth = width - 4
 	}
@@ -352,8 +352,9 @@ func ListItemStyles(p Palette) list.DefaultItemStyles {
 	// Selected state (focused item)
 	s.SelectedTitle = lipgloss.NewStyle().
 		Foreground(p.PrimaryHover).
+		MarginLeft(2).
 		Bold(true)
-	s.SelectedDesc = lipgloss.NewStyle().Foreground(p.TextMuted)
+	s.SelectedDesc = lipgloss.NewStyle().Foreground(p.TextMuted).MarginLeft(2)
 
 	// Dimmed state (when filter input is activated)
 	s.DimmedTitle = lipgloss.NewStyle().Foreground(p.TextMuted)
