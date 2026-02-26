@@ -142,7 +142,11 @@ func (m Model) SetStyles(name string, isDark bool) Model {
 	if m.ready {
 		p := theme.NewPalette(name, isDark)
 		m.list.Styles = theme.ListStyles(p)
+
+		// Create a fresh delegate with updated styles to ensure proper theming
+		m.delegate = list.NewDefaultDelegate()
 		m.delegate.Styles = theme.ListItemStyles(p)
+		m.list.SetDelegate(m.delegate)
 	}
 	return m
 }

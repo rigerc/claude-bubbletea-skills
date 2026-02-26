@@ -22,6 +22,17 @@ func desaturate(c color.Color, s float64) color.Color {
 	return colorful.Hsl(h, s, l)
 }
 
+// saturate returns c with its HSL saturation set to s (0–1).
+// Used for hover states to provide saturation-based feedback.
+func saturate(c color.Color, s float64) color.Color {
+	cf, ok := colorful.MakeColor(c)
+	if !ok {
+		return c
+	}
+	h, _, l := cf.Hsl()
+	return colorful.Hsl(h, s, l)
+}
+
 // Palette defines semantic colors for the application theme.
 type Palette struct {
 	// Brand
@@ -86,13 +97,22 @@ func buildPalette(base, sec color.Color, isDark bool) Palette {
 
 	if isDark {
 		primary = lipgloss.Lighten(base, 0.12)
-		primaryHover = lipgloss.Lighten(base, 0.22)
+		// Hover: increase both lightness AND saturation for clear affordance
+		primaryHover = saturate(lipgloss.Lighten(base, 0.22), 0.85)
 		secondary = lipgloss.Lighten(sec, 0.12)
 	} else {
 		primary = base
-		primaryHover = lipgloss.Darken(base, 0.08)
+		// Hover: darken slightly with saturation boost for clear affordance
+		primaryHover = saturate(lipgloss.Darken(base, 0.08), 0.90)
 		secondary = sec
 	}
+
+	// Fixed status colors for consistent UX - independent of brand
+	// These are recognizable emotional anchors that users expect
+	fixedError := ld(lipgloss.Color("#FF4444"), lipgloss.Color("#CC3333"))    // Red - always red
+	fixedSuccess := ld(lipgloss.Color("#44DD66"), lipgloss.Color("#22AA44"))  // Green - always green
+	fixedWarning := ld(lipgloss.Color("#FFAA22"), lipgloss.Color("#DD8800"))  // Amber - always amber
+	fixedInfo := ld(lipgloss.Color("#44AAFF"), lipgloss.Color("#2277DD"))     // Blue - always blue
 
 	return Palette{
 		Primary:       primary,
@@ -105,10 +125,10 @@ func buildPalette(base, sec color.Color, isDark bool) Palette {
 		TextMuted:     ld(charmtone.Squid, charmtone.Oyster),
 		TextInverse:   charmtone.Pepper,
 
-		Error:   lipgloss.Complementary(base),
-		Success: lipgloss.Alpha(charmtone.Julep, 0.85),
-		Warning: lipgloss.Alpha(charmtone.Tang, 0.90),
-		Info:    lipgloss.Alpha(charmtone.Thunder, 0.90),
+		Error:   fixedError,
+		Success: fixedSuccess,
+		Warning: fixedWarning,
+		Info:    fixedInfo,
 	}
 }
 
@@ -181,10 +201,11 @@ func init() {
 		Base:      lipgloss.Color("#00F5D4"),
 		Secondary: lipgloss.Color("#FF00C8"),
 		Modify: func(p Palette, _ bool) Palette {
+			// Neon theme uses brighter, more saturated status colors
 			p.Error = lipgloss.Color("#FF3B3B")
 			p.Success = lipgloss.Color("#00FF85")
 			p.Warning = lipgloss.Color("#FFD60A")
-			p.Info = lipgloss.Alpha(lipgloss.Color("#FF00C8"), 0.90)
+			p.Info = lipgloss.Color("#FF00C8") // Use secondary as info for neon aesthetic
 			return p
 		},
 	})

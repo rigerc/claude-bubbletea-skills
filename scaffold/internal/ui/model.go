@@ -193,6 +193,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.stack.Len() > 0 {
 			m.current = m.stack.Pop()
+			// Propagate theme change to the screen we returned to
+			if themeChanged {
+				if setter, ok := m.current.(interface{ SetStyles(string, bool) screens.Screen }); ok {
+					m.current = setter.SetStyles(m.cfg.UI.ThemeName, m.isDark)
+				}
+			}
 		}
 		return m, saveCmd
 
