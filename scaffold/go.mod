@@ -1,18 +1,19 @@
 module scaffold
 
-go 1.25.2
+go 1.26
 
 require (
 	charm.land/bubbles/v2 v2.0.0
 	charm.land/bubbletea/v2 v2.0.0
 	charm.land/huh/v2 v2.0.0-20260105203756-d8977490d20c
 	charm.land/lipgloss/v2 v2.0.0
-	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260223200540-d6a276319c45
+	github.com/charmbracelet/x/exp/charmtone v0.0.0-20260225200202-61df8bc4b903
 	github.com/knadh/koanf/parsers/json v1.0.0
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/providers/rawbytes v1.0.0
 	github.com/knadh/koanf/v2 v2.3.2
 	github.com/lsferreira42/figlet-go v0.0.2-beta
+	github.com/lucasb-eyer/go-colorful v1.3.0
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.9.1
 )

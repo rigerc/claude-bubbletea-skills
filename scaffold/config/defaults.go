@@ -7,15 +7,16 @@ package config
 func DefaultConfig() *Config {
 	return &Config{
 		LogLevel: "info",
-		Debug:    false,
+		Debug:    true,
 		UI: UIConfig{
 			MouseEnabled: true,
-			ThemeName:    "default",
+			ThemeName:    "ember",
+			ShowBanner:   true,
 		},
 		App: AppConfig{
 			Name:    "scaffold",
 			Version: "1.0.0",
-			Title:   "BubbleTea Scaffold",
+			Title:   "Scaffold",
 		},
 	}
 }
