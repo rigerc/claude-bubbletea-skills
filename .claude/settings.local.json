@@ -21,7 +21,8 @@
       "Skill(go-styleguide)",
       "Skill(bubbletea-v2)",
       "Skill(huh-v2)",
-      "Skill(koanf)"
+      "Skill(koanf)",
+      "Bash(gh pr:*)"
     ]
   }
 }
