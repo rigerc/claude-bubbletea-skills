@@ -1,9 +1,19 @@
 Output scaffold.gif
 Set FontSize 14
 
+Hide
 Type "scaffold/scfld"
 Enter
+Show
 Sleep 5
+Ctrl+t
+Sleep 0.5
+Ctrl+t
+Sleep 0.5
+Ctrl+t
+Sleep 0.5
+Ctrl+t
+Sleep 0.5
 Down
 Enter
 Sleep 1

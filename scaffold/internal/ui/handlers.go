@@ -5,6 +5,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"math/rand"
 
 	"scaffold/config"
 	"scaffold/internal/task"
@@ -60,7 +61,38 @@ func (m rootModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cancel()
 		return m, tea.Quit
 	}
+	if key.Matches(msg, m.keys.RandomTheme) {
+		return m.handleRandomTheme()
+	}
 	return m.forwardToScreen(msg)
+}
+
+func (m rootModel) handleRandomTheme() (tea.Model, tea.Cmd) {
+	themes := theme.AvailableThemes()
+	if len(themes) == 0 {
+		return m, nil
+	}
+
+	// Pick random theme different from current if possible
+	currentTheme := m.cfg.UI.ThemeName
+	var candidates []string
+	for _, t := range themes {
+		if t != currentTheme {
+			candidates = append(candidates, t)
+		}
+	}
+
+	// If only one theme or all same, use first
+	if len(candidates) == 0 {
+		candidates = themes
+	}
+
+	newTheme := candidates[rand.Intn(len(candidates))]
+	m.cfg.UI.ThemeName = newTheme
+	return m, tea.Batch(
+		status.SetInfo("Theme: "+newTheme, 0),
+		m.themeMgr.SetThemeName(newTheme),
+	)
 }
 
 func (m rootModel) handleModalShow(msg modal.ShowMsg) (tea.Model, tea.Cmd) {
