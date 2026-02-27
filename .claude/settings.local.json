@@ -25,7 +25,8 @@
       "Bash(gh pr:*)",
       "Bash(node:*)",
       "Bash(wc:*)",
-      "Skill(teatest-v2)"
+      "Skill(teatest-v2)",
+      "WebSearch"
     ]
   }
 }

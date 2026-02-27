@@ -104,18 +104,18 @@ func initLogger(cfg *config.Config, output io.Writer) error {
 
 // loadConfig builds the effective config following priority order:
 // defaults → config file → CLI flags (only when explicitly set).
-// Returns the config and the path used (empty if no file was loaded).
+// Returns the config and the path to use (default path even if file doesn't exist yet).
 func loadConfig() (*config.Config, string) {
 	cfg := config.DefaultConfig()
-	configPath := ""
+	configPath := cmd.GetConfigFile() // Get default or explicit path
 
-	if path := cmd.GetConfigFile(); path != "" {
-		fileCfg, err := config.Load(path)
+	if configPath != "" {
+		fileCfg, err := config.Load(configPath)
 		if err == nil {
 			cfg = fileCfg
-			configPath = path
 		}
 		// ErrConfigNotFound or parse error → silently fall back to defaults
+		// but keep configPath so first-run detection and saving work
 	}
 
 	// CLI flags override file/defaults only when explicitly passed.

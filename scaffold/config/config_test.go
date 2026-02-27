@@ -105,6 +105,55 @@ func TestGetEffectiveLogLevel_Normal(t *testing.T) {
 	assert.Equal(t, "warn", cfg.GetEffectiveLogLevel())
 }
 
+// --- Slugify ---
+
+func TestSlugify(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"My App", "my-app"},
+		{"some_cool_name", "some-cool-name"},
+		{"App!!Name", "appname"}, // special chars are removed, not replaced
+		{"scaffold", "scaffold"},
+		{"Multiple   Spaces", "multiple-spaces"},
+		{"UPPERCASE", "uppercase"},
+		{"already-hyphenated", "already-hyphenated"},
+		{"---leading-trailing---", "leading-trailing"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, Slugify(tt.input))
+		})
+	}
+}
+
+// --- DefaultConfigPath ---
+
+func TestDefaultConfigPath_NotEmpty(t *testing.T) {
+	path := DefaultConfigPath()
+	assert.NotEmpty(t, path, "DefaultConfigPath should return a non-empty path")
+}
+
+func TestDefaultConfigPath_ContainsAppName(t *testing.T) {
+	path := DefaultConfigPath()
+	appName := Slugify(DefaultConfig().App.Name)
+	assert.Contains(t, path, appName, "DefaultConfigPath should contain slugified app name")
+	assert.Contains(t, path, "config.json", "DefaultConfigPath should end with config.json")
+}
+
+func TestDefaultConfigPath_RespectsXDGConfigHome(t *testing.T) {
+	// Set custom XDG_CONFIG_HOME
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	path := DefaultConfigPath()
+	appName := Slugify(DefaultConfig().App.Name)
+	expectedSuffix := filepath.Join(tmpDir, appName, "config.json")
+	assert.Equal(t, expectedSuffix, path)
+}
+
 // --- helpers ---
 
 // writeJSON writes content to a temp file and returns its path.

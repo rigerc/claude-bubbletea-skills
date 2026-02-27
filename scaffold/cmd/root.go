@@ -3,6 +3,8 @@
 package cmd
 
 import (
+	"scaffold/config"
+
 	"github.com/spf13/cobra"
 )
 
@@ -85,7 +87,7 @@ func ShouldRunUI() bool {
 func init() {
 	// Config file flag
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "",
-		"Path to configuration file (default: $HOME/.scaffold.json)")
+		"Path to configuration file (default: $XDG_CONFIG_HOME/scaffold/config.json)")
 
 	// Debug mode flag
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false,
@@ -96,9 +98,12 @@ func init() {
 		"Set logging level (trace, debug, info, warn, error, fatal)")
 }
 
-// GetConfigFile returns the path to the configuration file.
+// GetConfigFile returns the path to the configuration file, computing default if needed.
 func GetConfigFile() string {
-	return cfgFile
+	if cfgFile != "" {
+		return cfgFile
+	}
+	return config.DefaultConfigPath()
 }
 
 // GetLogLevel returns the configured log level.
