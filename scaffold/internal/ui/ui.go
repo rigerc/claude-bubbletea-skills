@@ -10,10 +10,10 @@ import (
 )
 
 // New creates a new root model from the config.
+// ctx and cancel are the application-wide context for graceful shutdown.
 // configPath is the path to persist settings; empty means no file save.
 // firstRun indicates that no config file existed before this launch.
-func New(cfg config.Config, configPath string, firstRun bool) rootModel {
-	ctx, cancel := context.WithCancel(context.Background())
+func New(ctx context.Context, cancel context.CancelFunc, cfg config.Config, configPath string, firstRun bool) rootModel {
 	return newRootModel(ctx, cancel, cfg, configPath, firstRun)
 }
 

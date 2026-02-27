@@ -66,7 +66,7 @@ func main() {
 	}()
 
 	firstRun := config.IsFirstRun(configPath)
-	if err := ui.Run(ctx, ui.New(*cfg, configPath, firstRun)); err != nil {
+	if err := ui.Run(ctx, ui.New(ctx, cancel, *cfg, configPath, firstRun)); err != nil {
 		applogger.Fatal().Err(err).Msg("UI failed")
 	}
 }

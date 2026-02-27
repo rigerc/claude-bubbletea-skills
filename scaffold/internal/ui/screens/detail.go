@@ -67,7 +67,7 @@ func (d *Detail) Init() tea.Cmd {
 	return tea.Batch(
 		d.load.Start(),
 		tickCmd(),
-		task.RunWithTimeout(d.ctx, "detail-load", 1500*time.Millisecond,
+		task.Run(d.ctx, "detail-load",
 			func(ctx context.Context) (string, error) {
 				select {
 				case <-ctx.Done():

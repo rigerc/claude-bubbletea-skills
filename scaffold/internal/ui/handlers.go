@@ -91,7 +91,10 @@ func (m rootModel) handleWelcomeDone(_ screens.WelcomeDoneMsg) (tea.Model, tea.C
 	if m.stack.Len() > 0 {
 		m.current = m.stack.Pop()
 	}
-	return m, status.SetSuccess("Welcome! Config saved.", 0)
+	if m.configPath != "" {
+		return m, status.SetSuccess("Welcome! Config saved.", 0)
+	}
+	return m, status.SetSuccess("Welcome!", 0)
 }
 
 func (m rootModel) handleNavigate(msg NavigateMsg) (tea.Model, tea.Cmd) {
