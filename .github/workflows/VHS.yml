@@ -25,9 +25,12 @@ jobs:
           sudo apt-get install -y ffmpeg ttyd
           go install github.com/charmbracelet/vhs@latest
 
+      - name: Build scaffold binary
+        working-directory: scaffold
+        run: go build -o scfld .
+
       - name: Generate GIFs
-        run: |
-          vhs vhs.tape
+        run: vhs vhs.tape
 
       - name: Commit updated GIFs
         run: |
