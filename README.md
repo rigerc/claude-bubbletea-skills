@@ -1,4 +1,4 @@
-# bubbletea-v2-scaffold
+# Bubbletea Development
 
 ![Video](scaffold.gif)
 
