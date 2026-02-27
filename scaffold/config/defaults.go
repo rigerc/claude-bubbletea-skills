@@ -6,17 +6,18 @@ package config
 // setting environment variables.
 func DefaultConfig() *Config {
 	return &Config{
-		LogLevel: "info",
-		Debug:    true,
+		ConfigVersion: CurrentConfigVersion,
+		LogLevel:      "info",
+		Debug:    false,
 		UI: UIConfig{
 			MouseEnabled: true,
 			ThemeName:    "ember",
 			ShowBanner:   true,
 		},
 		App: AppConfig{
-			Name:    "scaffold",
-			Version: "1.0.0",
-			Title:   "Scaffold",
+			Name:        "scaffold",
+			Description: "A scaffold application",
+			Version:     "1.0.0",
 		},
 	}
 }

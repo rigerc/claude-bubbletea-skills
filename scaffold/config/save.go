@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	koanfjson "github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/rawbytes"
@@ -14,6 +15,12 @@ import (
 func Save(cfg *Config, path string) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("config: save validation: %w", err)
+	}
+
+	// Ensure parent directory exists
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("config: creating config directory: %w", err)
 	}
 
 	raw, err := cfg.ToJSON()

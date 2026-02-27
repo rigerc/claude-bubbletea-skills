@@ -5,8 +5,9 @@ import "charm.land/bubbles/v2/key"
 
 // GlobalKeyMap holds global key bindings.
 type GlobalKeyMap struct {
-	Quit key.Binding
-	Back key.Binding
+	Quit        key.Binding
+	Back        key.Binding
+	RandomTheme key.Binding // hidden
 }
 
 // DefaultGlobalKeyMap returns the default global key bindings.
@@ -19,6 +20,9 @@ func DefaultGlobalKeyMap() GlobalKeyMap {
 		Back: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "back"),
+		),
+		RandomTheme: key.NewBinding(
+			key.WithKeys("ctrl+t"),
 		),
 	}
 }

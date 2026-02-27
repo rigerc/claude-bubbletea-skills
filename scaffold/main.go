@@ -3,9 +3,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -47,7 +49,24 @@ func main() {
 
 	applogger.Info().Msg("Starting scaffold")
 
-	if err := ui.Run(ui.New(*cfg, configPath)); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 8192)
+			n := runtime.Stack(buf, false)
+			applogger.Fatal().
+				Str("panic", fmt.Sprintf("%v", r)).
+				Str("stack", string(buf[:n])).
+				Msg("panic: unrecovered")
+			fmt.Fprintf(os.Stderr, "\n[scaffold] crashed — see debug.log for details\n")
+			os.Exit(2)
+		}
+	}()
+
+	firstRun := config.IsFirstRun(configPath)
+	if err := ui.Run(ctx, ui.New(ctx, cancel, *cfg, configPath, firstRun)); err != nil {
 		applogger.Fatal().Err(err).Msg("UI failed")
 	}
 }
@@ -85,18 +104,18 @@ func initLogger(cfg *config.Config, output io.Writer) error {
 
 // loadConfig builds the effective config following priority order:
 // defaults → config file → CLI flags (only when explicitly set).
-// Returns the config and the path used (empty if no file was loaded).
+// Returns the config and the path to use (default path even if file doesn't exist yet).
 func loadConfig() (*config.Config, string) {
 	cfg := config.DefaultConfig()
-	configPath := ""
+	configPath := cmd.GetConfigFile() // Get default or explicit path
 
-	if path := cmd.GetConfigFile(); path != "" {
-		fileCfg, err := config.Load(path)
+	if configPath != "" {
+		fileCfg, err := config.Load(configPath)
 		if err == nil {
 			cfg = fileCfg
-			configPath = path
 		}
 		// ErrConfigNotFound or parse error → silently fall back to defaults
+		// but keep configPath so first-run detection and saving work
 	}
 
 	// CLI flags override file/defaults only when explicitly passed.

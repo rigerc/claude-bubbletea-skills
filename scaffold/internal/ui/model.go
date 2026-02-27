@@ -1,15 +1,17 @@
 package ui
 
 import (
+	"context"
+
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"scaffold/config"
-	"scaffold/internal/ui/banner"
+	"scaffold/internal/task"
 	"scaffold/internal/ui/keys"
 	"scaffold/internal/ui/menu"
+	"scaffold/internal/ui/modal"
 	"scaffold/internal/ui/screens"
 	"scaffold/internal/ui/status"
 	"scaffold/internal/ui/theme"
@@ -19,6 +21,15 @@ import (
 type NavigateMsg struct {
 	Screen screens.Screen
 }
+
+// rootState represents the loading state of the root model.
+type rootState int
+
+const (
+	rootStateLoading rootState = iota // waiting for first WindowSizeMsg
+	rootStateReady                    // terminal dimensions known, UI renderable
+	rootStateError                    // unrecoverable startup error
+)
 
 // screenStack holds the navigation history.
 type screenStack struct {
@@ -56,27 +67,34 @@ func (s *screenStack) Len() int {
 
 // rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
 type rootModel struct {
+	ctx          context.Context
+	cancel       context.CancelFunc // shutdown only; cancels all running tasks on quit
 	cfg          config.Config
 	configPath   string // empty = no persistent save
+	firstRun     bool
 	status       status.State
 	statusStyles status.Styles
 	width        int
 	height       int
 	banner       string
 	themeMgr     *theme.Manager
-	ready        bool
+	state        rootState
 	styles       theme.Styles
 	keys         keys.GlobalKeyMap
 	help         help.Model
+	modal        modal.Model
 	current      screens.Screen
 	stack        screenStack
 }
 
 // newRootModel creates a new root model.
-func newRootModel(cfg config.Config, configPath string) rootModel {
+func newRootModel(ctx context.Context, cancel context.CancelFunc, cfg config.Config, configPath string, firstRun bool) rootModel {
 	return rootModel{
+		ctx:        ctx,
+		cancel:     cancel,
 		cfg:        cfg,
 		configPath: configPath,
+		firstRun:   firstRun,
 		status:     status.State{Text: "Ready", Kind: status.KindNone},
 		themeMgr:   theme.GetManager(),
 		current:    screens.NewHome(),
@@ -87,147 +105,56 @@ func newRootModel(cfg config.Config, configPath string) rootModel {
 
 // Init initializes the root model.
 func (m rootModel) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := tea.Batch(
 		tea.RequestBackgroundColor,
 		m.themeMgr.Init(m.cfg.UI.ThemeName, false, m.width),
 	)
+	if m.firstRun {
+		return tea.Batch(cmds, func() tea.Msg {
+			return NavigateMsg{Screen: screens.NewWelcome()}
+		})
+	}
+	return cmds
 }
 
 // Update handles messages for the root model.
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.ready = true
-
-		// Propagate width and height to current screen
-		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
-			m.current = setter.SetWidth(m.width)
-		}
-		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
-			m.current = setter.SetHeight(m.bodyHeight())
-		}
-		return m, m.themeMgr.SetWidth(m.width)
-
+		return m.handleWindowSize(msg)
 	case tea.BackgroundColorMsg:
-		isDark := msg.IsDark()
-		m.help.Styles = help.DefaultStyles(isDark)
-		return m, m.themeMgr.SetDarkMode(isDark)
-
+		return m.handleBgColor(msg)
 	case theme.ThemeChangedMsg:
-		// Apply to self
-		m.styles = theme.NewFromPalette(msg.State.Palette, msg.State.Width)
-		m.statusStyles = status.NewStyles(msg.State.Palette)
-		m.help.SetWidth(m.styles.MaxWidth)
-
-		// Render/re-render banner with current theme palette
-		if m.cfg.UI.ShowBanner {
-			m.renderBanner()
-		}
-
-		// Apply to current screen
-		if t, ok := m.current.(theme.Themeable); ok {
-			t.ApplyTheme(msg.State)
-		}
-		return m, nil
-
+		return m.handleThemeChanged(msg)
 	case tea.KeyPressMsg:
-		if key.Matches(msg, m.keys.Quit) {
-			return m, tea.Quit
-		}
-
+		return m.handleKey(msg)
+	case modal.ShowMsg:
+		return m.handleModalShow(msg)
+	case modal.ConfirmedMsg, modal.CancelledMsg, modal.PromptSubmittedMsg:
+		return m.handleModalDismiss(msg)
+	case task.ErrMsg:
+		return m.handleTaskErr(msg)
+	case screens.WelcomeDoneMsg:
+		return m.handleWelcomeDone(msg)
 	case NavigateMsg:
-		// Push current screen to stack and navigate to new screen
-		m.stack.Push(m.current)
-		m.current = msg.Screen
-		// Propagate width and height to new screen
-		if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
-			m.current = setter.SetWidth(m.width)
-		}
-		if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
-			m.current = setter.SetHeight(m.bodyHeight())
-		}
-		// Apply current theme to new screen
-		if t, ok := m.current.(theme.Themeable); ok {
-			t.ApplyTheme(m.themeMgr.State())
-		}
-		return m, m.current.Init()
-
+		return m.handleNavigate(msg)
 	case menu.SelectionMsg:
-		switch msg.Item.ScreenID() {
-		case "settings":
-			return m.Update(NavigateMsg{Screen: screens.NewSettings(m.cfg)})
-		default:
-			detail := screens.NewDetail(
-				msg.Item.Title(), msg.Item.Description(), msg.Item.ScreenID(),
-			)
-			return m.Update(NavigateMsg{Screen: detail})
-		}
-
+		return m.handleMenuSelection(msg)
 	case screens.SettingsSavedMsg:
-		themeChanged := m.cfg.UI.ThemeName != msg.Cfg.UI.ThemeName
-		m.cfg = msg.Cfg
-
-		// Clear banner if disabled
-		if !msg.Cfg.UI.ShowBanner {
-			m.banner = ""
-		}
-
-		var saveCmd tea.Cmd
-		if m.configPath != "" {
-			if err := config.Save(&m.cfg, m.configPath); err != nil {
-				saveCmd = status.SetError("Save failed: "+err.Error(), 0)
-			} else {
-				saveCmd = status.SetSuccess("Settings saved", 0)
-			}
-		} else {
-			saveCmd = status.SetInfo("Settings applied (no config file)", 0)
-		}
-
-		// Handle theme change via manager
-		if themeChanged {
-			if m.stack.Len() > 0 {
-				m.current = m.stack.Pop()
-			}
-			return m, tea.Batch(
-				saveCmd,
-				m.themeMgr.SetThemeName(m.cfg.UI.ThemeName),
-			)
-		}
-
-		if m.stack.Len() > 0 {
-			m.current = m.stack.Pop()
-		}
-		return m, saveCmd
-
+		return m.handleSettingsSaved(msg)
 	case screens.BackMsg:
-		if m.stack.Len() > 0 {
-			m.current = m.stack.Pop()
-		}
-		return m, nil
-
+		return m.handleBack(msg)
 	case status.Msg:
-		m.status = status.State{Text: msg.Text, Kind: msg.Kind}
-		return m, nil
-
+		return m.handleStatus(msg)
 	case status.ClearMsg:
-		m.status = status.State{Text: "Ready", Kind: status.KindNone}
-		return m, nil
+		return m.handleStatusClear(msg)
 	}
-
-	// Delegate to current screen
-	var cmd tea.Cmd
-	updated, cmd := m.current.Update(msg)
-	if s, ok := updated.(screens.Screen); ok {
-		m.current = s
-	}
-	return m, cmd
+	return m.forwardToScreen(msg)
 }
 
 // View renders the root model.
 func (m rootModel) View() tea.View {
-	if !m.ready {
+	if m.state != rootStateReady {
 		return tea.NewView("")
 	}
 
@@ -238,116 +165,9 @@ func (m rootModel) View() tea.View {
 		m.footerView(),
 	)
 
-	return tea.NewView(m.styles.App.Render(content))
-}
-
-// renderBanner renders the ASCII art banner at its natural width and caches the result.
-// Using a large fixed width lets lipgloss.Width(m.banner) reflect the font's true width,
-// which headerView uses to decide whether the terminal is wide enough to display it.
-func (m *rootModel) renderBanner() {
-	state := m.themeMgr.State()
-	p := state.Palette
-	if p.Primary == nil {
-		p = theme.NewPalette(m.cfg.UI.ThemeName, state.IsDark)
+	base := m.styles.App.Render(content)
+	if m.modal.Visible() {
+		return tea.NewView(modal.Overlay(base, m.modal.View(), m.width, m.height))
 	}
-	b, err := banner.Render(banner.Config{
-		Text:          m.cfg.App.Title,
-		Font:          "larry3d",
-		Width:         100,
-		Justification: 0,
-		Gradient:      banner.GradientThemed(p.Primary, p.Secondary),
-	})
-	if err != nil {
-		b = m.cfg.App.Title
-	}
-	m.banner = b
-}
-
-// headerView renders the header with either the ASCII banner or a styled plain-text title.
-// The ASCII banner is shown only when ShowBanner is enabled, the banner has been rendered,
-// and the terminal is wide enough to display it. In all other cases — including when
-// ShowBanner is disabled or the terminal is too narrow — the plain-text title is shown.
-func (m rootModel) headerView() string {
-	if m.cfg.UI.ShowBanner && m.banner != "" && m.width > 0 && m.width >= lipgloss.Width(m.banner) {
-		return m.styles.Header.Render(m.banner)
-	}
-	return m.styles.Header.Render(m.plainTitleView())
-}
-
-// plainTitleView renders a styled plain-text title used when ShowBanner is off.
-func (m rootModel) plainTitleView() string {
-	return m.styles.PlainTitle.Render(m.cfg.App.Title)
-}
-
-// helpView renders the persistent help box showing global and screen-specific keybindings.
-func (m rootModel) helpView() string {
-	combined := m.combinedKeys()
-	return m.styles.Help.Render(m.help.View(combined))
-}
-
-// combinedKeys returns a key map that combines global keys with screen-specific keys.
-func (m rootModel) combinedKeys() combinedKeyMap {
-	return combinedKeyMap{
-		global: m.keys,
-		screen: m.current,
-	}
-}
-
-// combinedKeyMap combines global and screen-specific key bindings.
-type combinedKeyMap struct {
-	global keys.GlobalKeyMap
-	screen screens.Screen
-}
-
-// ShortHelp returns combined short help bindings.
-func (c combinedKeyMap) ShortHelp() []key.Binding {
-	bindings := c.global.ShortHelp()
-	if kb, ok := c.screen.(screens.KeyBinder); ok {
-		bindings = append(bindings, kb.ShortHelp()...)
-	}
-	return bindings
-}
-
-// FullHelp returns combined full help bindings.
-func (c combinedKeyMap) FullHelp() [][]key.Binding {
-	groups := c.global.FullHelp()
-	if kb, ok := c.screen.(screens.KeyBinder); ok {
-		groups = append(groups, kb.FullHelp()...)
-	}
-	return groups
-}
-
-// bodyHeight estimates the available height for the body content area.
-// It subtracts the header, help, and footer chrome from the terminal height.
-func (m rootModel) bodyHeight() int {
-	if m.height == 0 {
-		return 0
-	}
-	header := lipgloss.Height(m.headerView())
-	helpH := lipgloss.Height(m.helpView())
-	footer := lipgloss.Height(m.footerView())
-	body := m.height - header - helpH - footer
-	if body < 1 {
-		body = 1
-	}
-	return body
-}
-
-// footerView renders the status bar footer.
-func (m rootModel) footerView() string {
-	left := m.statusStyles.Render(m.status.Text, m.status.Kind)
-	rightContent := " v" + m.cfg.App.Version
-	if m.cfg.Debug {
-		rightContent += " [DEBUG]"
-	}
-	right := m.styles.StatusRight.Render(rightContent + " ")
-
-	// Account for footer border (2) and padding (1)
-	innerWidth := m.styles.MaxWidth - 3
-
-	gap := lipgloss.NewStyle().
-		Width(innerWidth - lipgloss.Width(left) - lipgloss.Width(right)).
-		Render("")
-	footerContent := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
-	return m.styles.Footer.Render(footerContent)
+	return tea.NewView(base)
 }
