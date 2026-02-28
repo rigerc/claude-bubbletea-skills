@@ -105,8 +105,8 @@ func TestRootModel_StatusMsg_UpdatesStatus(t *testing.T) {
 	updated, _ := m.Update(status.Msg{Text: "something broke", Kind: status.KindError})
 	root := updated.(rootModel)
 
-	assert.Equal(t, "something broke", root.status.Text)
-	assert.Equal(t, status.KindError, root.status.Kind)
+	assert.Equal(t, "something broke", root.statusbar.State().Text)
+	assert.Equal(t, status.KindError, root.statusbar.State().Kind)
 }
 
 func TestRootModel_StatusClearMsg_ResetsStatus(t *testing.T) {
@@ -118,8 +118,8 @@ func TestRootModel_StatusClearMsg_ResetsStatus(t *testing.T) {
 	updated, _ = updated.(rootModel).Update(status.ClearMsg{})
 	root := updated.(rootModel)
 
-	assert.Equal(t, "Ready", root.status.Text)
-	assert.Equal(t, status.KindNone, root.status.Kind)
+	assert.Equal(t, "Ready", root.statusbar.State().Text)
+	assert.Equal(t, status.KindNone, root.statusbar.State().Kind)
 }
 
 // --- screenStack ---

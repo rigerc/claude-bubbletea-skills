@@ -9,11 +9,12 @@ import (
 
 	"scaffold/config"
 	"scaffold/internal/task"
+	"scaffold/internal/ui/header"
 	"scaffold/internal/ui/keys"
 	"scaffold/internal/ui/menu"
 	"scaffold/internal/ui/modal"
 	"scaffold/internal/ui/screens"
-	"scaffold/internal/ui/status"
+	"scaffold/internal/ui/statusbar"
 	"scaffold/internal/ui/theme"
 )
 
@@ -67,24 +68,24 @@ func (s *screenStack) Len() int {
 
 // rootModel is the root tea.Model — owns routing, WindowSize, header/footer.
 type rootModel struct {
-	ctx          context.Context
-	cancel       context.CancelFunc // shutdown only; cancels all running tasks on quit
-	cfg          config.Config
-	configPath   string // empty = no persistent save
-	firstRun     bool
-	status       status.State
-	statusStyles status.Styles
-	width        int
-	height       int
-	banner       string
-	themeMgr     *theme.Manager
-	state        rootState
-	styles       theme.Styles
-	keys         keys.GlobalKeyMap
-	help         help.Model
-	modal        modal.Model
-	current      screens.Screen
-	stack        screenStack
+	ctx        context.Context
+	cancel     context.CancelFunc // shutdown only; cancels all running tasks on quit
+	cfg        config.Config
+	configPath string // empty = no persistent save
+	firstRun   bool
+	width      int
+	height     int
+	bodyH      int // cached body height, updated on resize/navigation/theme change
+	themeMgr   *theme.Manager
+	state      rootState
+	styles     theme.Styles
+	keys       keys.GlobalKeyMap
+	help       help.Model
+	modal      modal.Model
+	header     header.Model
+	statusbar  statusbar.Model
+	current    screens.Screen
+	stack      screenStack
 }
 
 // newRootModel creates a new root model.
@@ -95,11 +96,12 @@ func newRootModel(ctx context.Context, cancel context.CancelFunc, cfg config.Con
 		cfg:        cfg,
 		configPath: configPath,
 		firstRun:   firstRun,
-		status:     status.State{Text: "Ready", Kind: status.KindNone},
 		themeMgr:   theme.GetManager(),
 		current:    screens.NewHome(),
 		keys:       keys.DefaultGlobalKeyMap(),
 		help:       help.New(),
+		header:     header.New(cfg),
+		statusbar:  statusbar.New(cfg),
 	}
 }
 
@@ -144,12 +146,8 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSettingsSaved(msg)
 	case screens.BackMsg:
 		return m.handleBack(msg)
-	case status.Msg:
-		return m.handleStatus(msg)
-	case status.ClearMsg:
-		return m.handleStatusClear(msg)
 	}
-	return m.forwardToScreen(msg)
+	return m.broadcast(msg)
 }
 
 // View renders the root model.
@@ -159,10 +157,10 @@ func (m rootModel) View() tea.View {
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		m.headerView(),
-		m.styles.Body.Render(m.current.Body()),
+		m.header.View(),
+		m.styles.Body.Height(m.bodyH).MaxHeight(m.bodyH).Render(m.current.Body()),
 		m.helpView(),
-		m.footerView(),
+		m.statusbar.View(),
 	)
 
 	base := m.styles.App.Render(content)

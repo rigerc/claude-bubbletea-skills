@@ -6,11 +6,8 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/paginator"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
-	"charm.land/lipgloss/v2"
-
 	"scaffold/config"
 	"scaffold/internal/ui/modal"
 	"scaffold/internal/ui/theme"
@@ -34,8 +31,6 @@ type settingsKeyMap struct {
 	Up     key.Binding
 	Down   key.Binding
 	Submit key.Binding
-	Left   key.Binding
-	Right  key.Binding
 	Reset  key.Binding
 }
 
@@ -53,14 +48,6 @@ func defaultSettingsKeyMap() settingsKeyMap {
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "submit"),
 		),
-		Left: key.NewBinding(
-			key.WithKeys("h"),
-			key.WithHelp("h", "prev group"),
-		),
-		Right: key.NewBinding(
-			key.WithKeys("l"),
-			key.WithHelp("l", "next group"),
-		),
 		Reset: key.NewBinding(
 			key.WithKeys("r"),
 			key.WithHelp("r", "reset defaults"),
@@ -72,14 +59,13 @@ func defaultSettingsKeyMap() settingsKeyMap {
 type Settings struct {
 	theme.ThemeAware
 
-	cfg       *config.Config
-	form      *huh.Form
-	groups    []config.GroupMeta
-	paginator paginator.Model
-	keys      settingsKeyMap
-	huhKeys   *huh.KeyMap
-	width     int
-	height    int
+	cfg     *config.Config
+	form    *huh.Form
+	groups  []config.GroupMeta
+	keys    settingsKeyMap
+	huhKeys *huh.KeyMap
+	width   int
+	height  int
 }
 
 // NewSettings creates a Settings screen from a config snapshot.
@@ -92,21 +78,16 @@ func NewSettings(cfg config.Config) *Settings {
 	}
 	s.groups = config.Schema(s.cfg)
 
-	// Initialize paginator with one page per group
-	s.paginator = paginator.New(
-		paginator.WithTotalPages(len(s.groups)),
-	)
-	s.paginator.Type = paginator.Dots
-
 	km := huh.NewDefaultKeyMap()
 	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
 	s.huhKeys = km
 
-	// Build form with only the first group
-	s.form = buildFormForGroup(s.groups[0]).
+	// Build single stacked form with all groups at a fixed height
+	s.form = buildFormForAllGroups(s.groups).
 		WithTheme(theme.HuhTheme(cfg.UI.ThemeName)).
 		WithKeyMap(km).
-		WithShowHelp(false)
+		WithShowHelp(false).
+		WithHeight(s.RequiredHeight())
 	return s
 }
 
@@ -133,12 +114,16 @@ func (s *Settings) SetWidth(w int) Screen {
 	return s
 }
 
-// SetHeight sets the available body height for scrolling.
+// SetHeight sets the available body height. The form height is capped at
+// RequiredHeight() so all fields are visible when space permits, and huh
+// handles internal scrolling when the terminal is shorter.
 func (s *Settings) SetHeight(h int) Screen {
 	s.height = h
-	if h > 0 {
-		s.form = s.form.WithHeight(h)
+	formH := s.RequiredHeight()
+	if h > 0 && h < formH {
+		formH = h
 	}
+	s.form = s.form.WithHeight(formH)
 	return s
 }
 
@@ -158,15 +143,6 @@ func (s *Settings) Init() tea.Cmd {
 func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	if ws, ok := msg.(tea.WindowSizeMsg); ok {
-		s.width = ws.Width
-		s.form = s.form.WithWidth(s.width)
-		if ws.Height > 0 {
-			s.height = ws.Height
-			s.form = s.form.WithHeight(s.height)
-		}
-	}
-
 	// Handle modal response: confirmed reset → dispatch SettingsSavedMsg with defaults.
 	if confirmed, ok := msg.(modal.ConfirmedMsg); ok {
 		if confirmed.ID == "reset-settings" {
@@ -175,7 +151,7 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Handle page navigation and reset with left/right/r keys
+	// Handle reset and submit keys
 	if s.form.State == huh.StateNormal {
 		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 			switch {
@@ -185,18 +161,6 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					"Reset Settings",
 					"Restore all defaults and save? This cannot be undone.",
 				)
-			case key.Matches(keyMsg, s.keys.Left):
-				if !s.paginator.OnFirstPage() {
-					s.paginator.PrevPage()
-					return s, s.rebuildFormForCurrentPage()
-				}
-				return s, nil
-			case key.Matches(keyMsg, s.keys.Right):
-				if !s.paginator.OnLastPage() {
-					s.paginator.NextPage()
-					return s, s.rebuildFormForCurrentPage()
-				}
-				return s, nil
 			case keyMsg.String() == "enter":
 				// Submit the form with Enter from any field
 				form, formCmd := s.form.Update(msg)
@@ -238,51 +202,35 @@ func (s *Settings) Body() string {
 	if s.form.State != huh.StateNormal {
 		return "Applying settings..."
 	}
-
-	// Show group title with page indicator, form, and paginator
-	groupTitle := s.groups[s.paginator.Page].Label
-	pageInfo := fmt.Sprintf("(%d/%d)", s.paginator.Page+1, len(s.groups))
-
-	// Style the header with secondary color
-	headerStyle := lipgloss.NewStyle().Foreground(s.Palette().Secondary).Bold(true)
-	header := headerStyle.MarginBottom(1).Render(groupTitle + " " + pageInfo)
-
-	return header + "\n" + s.form.View() + "\n" + s.paginator.View()
-}
-
-// rebuildFormForCurrentPage rebuilds the form for the current page.
-func (s *Settings) rebuildFormForCurrentPage() tea.Cmd {
-	s.form = buildFormForGroup(s.groups[s.paginator.Page]).
-		WithTheme(theme.HuhTheme(s.ThemeState().Name)).
-		WithKeyMap(s.huhKeys).
-		WithWidth(s.width).
-		WithShowHelp(false)
-	if s.height > 0 {
-		s.form = s.form.WithHeight(s.height)
-	}
-	return s.form.Init()
+	return s.form.View()
 }
 
 // ShortHelp returns short help key bindings for the global help bar.
 func (s *Settings) ShortHelp() []key.Binding {
-	return []key.Binding{s.keys.Left, s.keys.Right, s.keys.Submit, s.keys.Reset}
+	return []key.Binding{s.keys.Submit, s.keys.Reset}
 }
 
 // FullHelp returns full help key bindings for the global help bar.
 func (s *Settings) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{s.keys.Left, s.keys.Right, s.keys.Submit, s.keys.Reset}}
+	return [][]key.Binding{{s.keys.Submit, s.keys.Reset}}
 }
 
-// buildFormForGroup constructs a huh.Form for a single group.
-func buildFormForGroup(g config.GroupMeta) *huh.Form {
-	fields := make([]huh.Field, 0, len(g.Fields))
-	for _, fm := range g.Fields {
-		if f := buildField(fm); f != nil {
-			fields = append(fields, f)
+// buildFormForAllGroups constructs a single stacked huh.Form from all config groups.
+func buildFormForAllGroups(groups []config.GroupMeta) *huh.Form {
+	huhGroups := make([]*huh.Group, 0, len(groups))
+	for _, g := range groups {
+		fields := make([]huh.Field, 0, len(g.Fields))
+		for _, fm := range g.Fields {
+			if f := buildField(fm); f != nil {
+				fields = append(fields, f)
+			}
+		}
+		if len(fields) > 0 {
+			huhGroups = append(huhGroups, huh.NewGroup(fields...).Title(g.Label))
 		}
 	}
-	if len(fields) > 0 {
-		return huh.NewForm(huh.NewGroup(fields...))
+	if len(huhGroups) > 0 {
+		return huh.NewForm(huhGroups...).WithLayout(huh.LayoutStack)
 	}
 	return huh.NewForm()
 }

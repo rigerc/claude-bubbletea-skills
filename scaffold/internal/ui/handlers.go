@@ -2,10 +2,11 @@
 package ui
 
 import (
+	"math/rand"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"math/rand"
 
 	"scaffold/config"
 	"scaffold/internal/task"
@@ -17,17 +18,27 @@ import (
 )
 
 func (m rootModel) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+
 	m.width = msg.Width
 	m.height = msg.Height
 	m.state = rootStateReady
+
+	m.header, cmd = m.header.Update(msg)
+	cmds = append(cmds, cmd)
+	m.statusbar, cmd = m.statusbar.Update(msg)
+	cmds = append(cmds, cmd)
+
+	m.bodyH = m.bodyHeight()
 
 	if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
 		m.current = setter.SetWidth(m.width)
 	}
 	if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
-		m.current = setter.SetHeight(m.bodyHeight())
+		m.current = setter.SetHeight(m.bodyH)
 	}
-	return m, m.themeMgr.SetWidth(m.width)
+	return m, tea.Batch(append(cmds, m.themeMgr.SetWidth(m.width))...)
 }
 
 func (m rootModel) handleBgColor(msg tea.BackgroundColorMsg) (tea.Model, tea.Cmd) {
@@ -37,18 +48,23 @@ func (m rootModel) handleBgColor(msg tea.BackgroundColorMsg) (tea.Model, tea.Cmd
 }
 
 func (m rootModel) handleThemeChanged(msg theme.ThemeChangedMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+
 	m.styles = theme.NewFromPalette(msg.State.Palette, msg.State.Width)
-	m.statusStyles = status.NewStyles(msg.State.Palette)
 	m.help.SetWidth(m.styles.MaxWidth)
 
-	if m.cfg.UI.ShowBanner {
-		m.renderBanner()
-	}
+	m.header, cmd = m.header.Update(msg)
+	cmds = append(cmds, cmd)
+	m.statusbar, cmd = m.statusbar.Update(msg)
+	cmds = append(cmds, cmd)
 
 	if t, ok := m.current.(theme.Themeable); ok {
 		t.ApplyTheme(msg.State)
 	}
-	return m, nil
+
+	m.bodyH = m.bodyHeight()
+	return m, tea.Batch(cmds...)
 }
 
 func (m rootModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -64,7 +80,7 @@ func (m rootModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.RandomTheme) {
 		return m.handleRandomTheme()
 	}
-	return m.forwardToScreen(msg)
+	return m.broadcast(msg)
 }
 
 func (m rootModel) handleRandomTheme() (tea.Model, tea.Cmd) {
@@ -123,6 +139,7 @@ func (m rootModel) handleWelcomeDone(_ screens.WelcomeDoneMsg) (tea.Model, tea.C
 	if m.stack.Len() > 0 {
 		m.current = m.stack.Pop()
 	}
+	m.bodyH = m.bodyHeight()
 	if m.configPath != "" {
 		return m, status.SetSuccess("Welcome! Config saved.", 0)
 	}
@@ -132,11 +149,14 @@ func (m rootModel) handleWelcomeDone(_ screens.WelcomeDoneMsg) (tea.Model, tea.C
 func (m rootModel) handleNavigate(msg NavigateMsg) (tea.Model, tea.Cmd) {
 	m.stack.Push(m.current)
 	m.current = msg.Screen
+	// Recompute bodyH: the incoming screen may have different key bindings,
+	// which changes help height and therefore available body height.
+	m.bodyH = m.bodyHeight()
 	if setter, ok := m.current.(interface{ SetWidth(int) screens.Screen }); ok {
 		m.current = setter.SetWidth(m.width)
 	}
 	if setter, ok := m.current.(interface{ SetHeight(int) screens.Screen }); ok {
-		m.current = setter.SetHeight(m.bodyHeight())
+		m.current = setter.SetHeight(m.bodyH)
 	}
 	if t, ok := m.current.(theme.Themeable); ok {
 		t.ApplyTheme(m.themeMgr.State())
@@ -160,9 +180,10 @@ func (m rootModel) handleSettingsSaved(msg screens.SettingsSavedMsg) (tea.Model,
 	themeChanged := m.cfg.UI.ThemeName != msg.Cfg.UI.ThemeName
 	m.cfg = msg.Cfg
 
-	if !msg.Cfg.UI.ShowBanner {
-		m.banner = ""
-	}
+	// Propagate new config to the header component. WithCfg handles
+	// clearing the banner when ShowBanner is disabled and re-rendering it
+	// when ShowBanner is newly enabled (using the cached theme state).
+	m.header = m.header.WithCfg(m.cfg)
 
 	var saveCmd tea.Cmd
 	if m.configPath != "" {
@@ -179,12 +200,14 @@ func (m rootModel) handleSettingsSaved(msg screens.SettingsSavedMsg) (tea.Model,
 		if m.stack.Len() > 0 {
 			m.current = m.stack.Pop()
 		}
+		m.bodyH = m.bodyHeight()
 		return m, tea.Batch(saveCmd, m.themeMgr.SetThemeName(m.cfg.UI.ThemeName))
 	}
 
 	if m.stack.Len() > 0 {
 		m.current = m.stack.Pop()
 	}
+	m.bodyH = m.bodyHeight()
 	return m, saveCmd
 }
 
@@ -192,24 +215,30 @@ func (m rootModel) handleBack(_ screens.BackMsg) (tea.Model, tea.Cmd) {
 	if m.stack.Len() > 0 {
 		m.current = m.stack.Pop()
 	}
+	m.bodyH = m.bodyHeight()
 	return m, nil
 }
 
-func (m rootModel) handleStatus(msg status.Msg) (tea.Model, tea.Cmd) {
-	m.status = status.State{Text: msg.Text, Kind: msg.Kind}
-	return m, nil
-}
+// broadcast sends msg to all chrome components (header, statusbar) and the
+// current screen, collecting commands via tea.Batch. It is the fallback for
+// all messages not explicitly handled by the root Update switch — this ensures
+// status.Msg, status.ClearMsg, and any other unrecognised messages reach the
+// components that care about them.
+func (m rootModel) broadcast(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
 
-func (m rootModel) handleStatusClear(_ status.ClearMsg) (tea.Model, tea.Cmd) {
-	m.status = status.State{Text: "Ready", Kind: status.KindNone}
-	return m, nil
-}
+	m.header, cmd = m.header.Update(msg)
+	cmds = append(cmds, cmd)
 
-// forwardToScreen delegates an unhandled message to the current screen.
-func (m rootModel) forwardToScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.statusbar, cmd = m.statusbar.Update(msg)
+	cmds = append(cmds, cmd)
+
 	updated, cmd := m.current.Update(msg)
 	if s, ok := updated.(screens.Screen); ok {
 		m.current = s
 	}
-	return m, cmd
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }

@@ -5,49 +5,9 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 
-	"scaffold/internal/ui/banner"
 	"scaffold/internal/ui/keys"
 	"scaffold/internal/ui/screens"
-	"scaffold/internal/ui/theme"
 )
-
-// renderBanner renders the ASCII art banner at its natural width and caches the result.
-// Using a large fixed width lets lipgloss.Width(m.banner) reflect the font's true width,
-// which headerView uses to decide whether the terminal is wide enough to display it.
-func (m *rootModel) renderBanner() {
-	state := m.themeMgr.State()
-	p := state.Palette
-	if p.Primary == nil {
-		p = theme.NewPalette(m.cfg.UI.ThemeName, state.IsDark)
-	}
-	b, err := banner.Render(banner.Config{
-		Text:          m.cfg.App.Name,
-		Font:          "larry3d",
-		Width:         100,
-		Justification: 0,
-		Gradient:      banner.GradientThemed(p.Primary, p.Secondary),
-	})
-	if err != nil {
-		b = m.cfg.App.Name
-	}
-	m.banner = b
-}
-
-// headerView renders the header with either the ASCII banner or a styled plain-text title.
-// The ASCII banner is shown only when ShowBanner is enabled, the banner has been rendered,
-// and the terminal is wide enough to display it. In all other cases — including when
-// ShowBanner is disabled or the terminal is too narrow — the plain-text title is shown.
-func (m rootModel) headerView() string {
-	if m.cfg.UI.ShowBanner && m.banner != "" && m.width > 0 && m.width >= lipgloss.Width(m.banner) {
-		return m.styles.Header.Render(m.banner)
-	}
-	return m.styles.Header.Render(m.plainTitleView())
-}
-
-// plainTitleView renders a styled plain-text title used when ShowBanner is off.
-func (m rootModel) plainTitleView() string {
-	return m.styles.PlainTitle.Render(m.cfg.App.Name)
-}
 
 // helpView renders the persistent help box showing global and screen-specific keybindings.
 func (m rootModel) helpView() string {
@@ -87,37 +47,26 @@ func (c combinedKeyMap) FullHelp() [][]key.Binding {
 	return groups
 }
 
+// Layout constants document the fixed-height chrome components.
+// Header and help heights are dynamic (banner height varies; help wraps at
+// narrow terminals), so they are measured at runtime and cached in rootModel.bodyH.
+const (
+	// footerLines is the number of terminal lines the footer chrome occupies.
+	footerLines = 1
+	// minBodyLines is the minimum body height guaranteed by View().
+	minBodyLines = 1
+)
+
 // bodyHeight estimates the available height for the body content area.
 // It subtracts the header, help, and footer chrome from the terminal height.
 func (m rootModel) bodyHeight() int {
 	if m.height == 0 {
 		return 0
 	}
-	header := lipgloss.Height(m.headerView())
 	helpH := lipgloss.Height(m.helpView())
-	footer := lipgloss.Height(m.footerView())
-	body := m.height - header - helpH - footer
-	if body < 1 {
-		body = 1
+	body := m.height - m.header.Height() - helpH - footerLines
+	if body < minBodyLines {
+		body = minBodyLines
 	}
 	return body
-}
-
-// footerView renders the status bar footer.
-func (m rootModel) footerView() string {
-	left := m.statusStyles.Render(m.status.Text, m.status.Kind)
-	rightContent := " v" + m.cfg.App.Version
-	if m.cfg.Debug {
-		rightContent += " [DEBUG]"
-	}
-	right := m.styles.StatusRight.Render(rightContent + " ")
-
-	// Account for footer border (2) and padding (1)
-	innerWidth := m.styles.MaxWidth - 3
-
-	gap := lipgloss.NewStyle().
-		Width(innerWidth - lipgloss.Width(left) - lipgloss.Width(right)).
-		Render("")
-	footerContent := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
-	return m.styles.Footer.Render(footerContent)
 }

@@ -26,7 +26,8 @@
       "Bash(node:*)",
       "Bash(wc:*)",
       "Skill(teatest-v2)",
-      "WebSearch"
+      "WebSearch",
+      "Skill(cobra)"
     ]
   }
 }

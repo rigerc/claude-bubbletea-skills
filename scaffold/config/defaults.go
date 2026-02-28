@@ -8,9 +8,12 @@ func DefaultConfig() *Config {
 	return &Config{
 		ConfigVersion: CurrentConfigVersion,
 		LogLevel:      "info",
-		Debug:    false,
+		Debug:         false,
 		UI: UIConfig{
 			MouseEnabled: true,
+			CompactMode:  false,
+			OutputFormat: "text",
+			DateFormat:   "2006-01-02",
 			ThemeName:    "ember",
 			ShowBanner:   true,
 		},

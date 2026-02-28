@@ -54,6 +54,15 @@ type UIConfig struct {
 	// MouseEnabled enables mouse support in the TUI.
 	MouseEnabled bool `json:"mouseEnabled" mapstructure:"mouseEnabled" koanf:"mouseEnabled" cfg_label:"Mouse Support" cfg_desc:"Enable mouse click and scroll events"`
 
+	// CompactMode reduces vertical spacing throughout the UI.
+	CompactMode bool `json:"compactMode" mapstructure:"compactMode" koanf:"compactMode" cfg_label:"Compact Mode" cfg_desc:"Reduce vertical spacing in lists and menus"`
+
+	// OutputFormat controls how structured output is rendered.
+	OutputFormat string `json:"outputFormat" mapstructure:"outputFormat" koanf:"outputFormat" cfg_label:"Output Format" cfg_desc:"Format for structured output" cfg_options:"text,json,table"`
+
+	// DateFormat is the Go time layout used when displaying dates.
+	DateFormat string `json:"dateFormat" mapstructure:"dateFormat" koanf:"dateFormat" cfg_label:"Date Format" cfg_desc:"Go time layout, e.g. 2006-01-02"`
+
 	// ThemeName specifies the color theme to use.
 	ThemeName string `json:"themeName" mapstructure:"themeName" koanf:"themeName" cfg_label:"Color Theme" cfg_desc:"Visual theme for the application" cfg_options:"_themes"`
 
@@ -86,6 +95,9 @@ func loadDefaults(k *koanf.Koanf) error {
 		"debug":         defaults.Debug,
 		"ui": map[string]any{
 			"mouseEnabled": defaults.UI.MouseEnabled,
+			"compactMode":  defaults.UI.CompactMode,
+			"outputFormat": defaults.UI.OutputFormat,
+			"dateFormat":   defaults.UI.DateFormat,
 			"themeName":    defaults.UI.ThemeName,
 			"showBanner":   defaults.UI.ShowBanner,
 		},
