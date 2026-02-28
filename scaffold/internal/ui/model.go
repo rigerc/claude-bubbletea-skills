@@ -158,7 +158,7 @@ func (m rootModel) View() tea.View {
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		m.header.View().Content,
-		m.styles.Body.Height(m.bodyH).MaxHeight(m.bodyH).Render(m.current.Body()),
+		m.styles.Body.MaxHeight(m.bodyH).Render(m.current.Body()),
 		m.helpView(),
 		m.statusbar.View().Content,
 	)

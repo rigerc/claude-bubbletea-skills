@@ -55,16 +55,26 @@ const (
 	footerLines = 1
 	// minBodyLines is the minimum body height guaranteed by View().
 	minBodyLines = 1
+	// maxBodyPercent is the maximum percentage of terminal height the body can occupy.
+	maxBodyPercent = 60
 )
 
 // bodyHeight estimates the available height for the body content area.
-// It subtracts the header, help, and footer chrome from the terminal height.
+// It subtracts the header, help, and footer chrome from the terminal height,
+// then caps the result at maxBodyPercent of the terminal height.
 func (m rootModel) bodyHeight() int {
 	if m.height == 0 {
 		return 0
 	}
 	helpH := lipgloss.Height(m.helpView())
 	body := m.height - m.header.Height() - helpH - footerLines
+
+	// Cap at maxBodyPercent of terminal height
+	maxBody := m.height * maxBodyPercent / 100
+	if body > maxBody {
+		body = maxBody
+	}
+
 	if body < minBodyLines {
 		body = minBodyLines
 	}
