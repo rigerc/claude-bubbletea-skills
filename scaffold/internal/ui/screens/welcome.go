@@ -77,10 +77,10 @@ func (w *Welcome) Body() string {
 		Bold(true)
 
 	textStyle := lipgloss.NewStyle().
-		Foreground(p.TextPrimary)
+		Foreground(p.Foreground)
 
 	mutedStyle := lipgloss.NewStyle().
-		Foreground(p.TextMuted).
+		Foreground(p.ForegroundSubtle).
 		Italic(true)
 
 	features := []string{

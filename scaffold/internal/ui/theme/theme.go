@@ -78,6 +78,38 @@ func colorDistance(c1, c2 color.Color) float64 {
 	return cf1.DistanceCIEDE2000(cf2)
 }
 
+// withAlpha returns c with alpha channel simulated (0-1 range).
+// Since lipgloss doesn't support alpha, this desaturates and lightens/darkens
+// to simulate transparency. Blends toward lightness 0.5 (gray midpoint), which
+// is appropriate for borders and muted text where blending to the background
+// would lose too much visibility.
+func withAlpha(c color.Color, alpha float64) color.Color {
+	cf, ok := colorful.MakeColor(c)
+	if !ok {
+		return c
+	}
+	h, chroma, l := cf.Hcl()
+	newC := chroma * alpha
+	newL := l + (0.5-l)*(1-alpha)
+	return colorful.Hcl(h, newC, newL).Clamped()
+}
+
+// contrastingForeground returns white or black based on luminance to ensure
+// high contrast text on the given background color.
+// Uses the YIQ formula which is specifically designed for readability.
+func contrastingForeground(bg color.Color) color.Color {
+	cf, ok := colorful.MakeColor(bg)
+	if !ok {
+		return lipgloss.Color("#201F26") // default dark
+	}
+	// colorful.Color stores R,G,B as float64 in [0,1], so yiq is in [0,1]; threshold is 0.5.
+	yiq := (cf.R*299 + cf.G*587 + cf.B*114) / 1000
+	if yiq >= 0.5 {
+		return lipgloss.Color("#201F26") // dark text on light bg
+	}
+	return lipgloss.Color("#F1EFEF") // light text on dark bg
+}
+
 // -----------------------------------------------------------------------------
 // Color Variant Generation
 // -----------------------------------------------------------------------------
@@ -120,9 +152,37 @@ func ValidatePalette(p Palette) []string {
 
 	var warnings []string
 
-	// Check text contrast with primary
-	if dist := colorDistance(p.TextPrimary, p.Primary); dist < minTextContrastDistance {
-		warnings = append(warnings, "TextPrimary may have insufficient contrast with Primary")
+	// Check text contrast with background
+	if dist := colorDistance(p.Foreground, p.Background); dist < minTextContrastDistance {
+		warnings = append(warnings, "Foreground may have insufficient contrast with Background")
+	}
+
+	// Check primary/on-primary contrast
+	if dist := colorDistance(p.Primary, p.OnPrimary); dist < minTextContrastDistance {
+		warnings = append(warnings, "Primary and OnPrimary may have insufficient contrast")
+	}
+
+	// Check secondary/on-secondary contrast
+	if dist := colorDistance(p.Secondary, p.OnSecondary); dist < minTextContrastDistance {
+		warnings = append(warnings, "Secondary and OnSecondary may have insufficient contrast")
+	}
+
+	// Check status/on-status contrast
+	statusChecks := []struct {
+		name string
+		col  color.Color
+		on   color.Color
+	}{
+		{"Success", p.Success, p.OnSuccess},
+		{"Error", p.Error, p.OnError},
+		{"Warning", p.Warning, p.OnWarning},
+		{"Info", p.Info, p.OnInfo},
+	}
+
+	for _, check := range statusChecks {
+		if dist := colorDistance(check.col, check.on); dist < minTextContrastDistance {
+			warnings = append(warnings, fmt.Sprintf("%s and On%s may have insufficient contrast", check.name, check.name))
+		}
 	}
 
 	// Check status color distinctness
@@ -152,38 +212,58 @@ func ValidatePalette(p Palette) []string {
 
 // Palette defines semantic colors for the application theme.
 type Palette struct {
-	// Brand
-	Primary         color.Color // primary brand
-	PrimaryHover    color.Color // primary hover state
-	Secondary       color.Color // secondary brand
-	SubtlePrimary   color.Color // muted primary, unfocused primary items
-	SubtleSecondary color.Color // muted secondary, unfocused secondary items
-	FocusBorder     color.Color // focus indicator border (defaults to Primary; override per theme for variation)
+	// ── Core Colors (explicitly set by each theme) ──
+	Primary    color.Color // primary brand/action fill
+	Secondary  color.Color // secondary brand/action fill
+	Background color.Color // page/app background
+	Surface    color.Color // card, panel, sheet
+	Foreground color.Color // primary text/icons on Background/Surface
 
-	// Text (adaptive)
-	TextPrimary   color.Color // primary text
-	TextSecondary color.Color // secondary text
-	TextMuted     color.Color // borders, subtle elements
-	TextInverse   color.Color // text on brand-color backgrounds
+	// ── Computed from Surface ──────────────────────────
+	SurfaceRaised color.Color // elevated surface (popover, dropdown)
+	Overlay       color.Color // scrim behind modals (alpha 0.5 Foreground)
+	Border        color.Color // default border (alpha 0.12 Foreground)
+	BorderMuted   color.Color // subtle separators (alpha 0.06 Foreground)
 
-	// Status (always visible)
+	// ── Computed from Foreground ──────────────────────
+	ForegroundMuted  color.Color // secondary text (alpha 0.6 Foreground)
+	ForegroundSubtle color.Color // placeholder/disabled (alpha 0.38 Foreground)
+
+	// ── Computed from Primary/Secondary ───────────────
+	OnPrimary      color.Color // text on Primary (high contrast white/black)
+	PrimaryMuted   color.Color // low-emphasis primary (alpha 0.12 Primary)
+	OnSecondary    color.Color // text on Secondary (high contrast white/black)
+	SecondaryMuted color.Color // low-emphasis secondary (alpha 0.12 Secondary)
+
+	// ── Interactive ───────────────────────────────────
+	Focus color.Color // focus ring (always = Primary unless overridden)
+
+	// Status (defaults derived from isDark; can be overridden via Modify)
 	Success color.Color
 	Error   color.Color
 	Warning color.Color
 	Info    color.Color
+
+	OnSuccess color.Color // high contrast text on Success
+	OnError   color.Color // high contrast text on Error
+	OnWarning color.Color // high contrast text on Warning
+	OnInfo    color.Color // high contrast text on Info
 }
 
 // -----------------------------------------------------------------------------
 // Available Themes
 // -----------------------------------------------------------------------------
 
-// ThemeSpec defines a named theme by its base and secondary seed colors.
+// ThemeSpec defines a named theme by its core colors.
 // Register themes with [RegisterTheme] before calling [NewPalette].
 // An optional Modify hook can adjust the generated Palette after derivation.
 type ThemeSpec struct {
-	Name      string
-	Base      color.Color
-	Secondary color.Color
+	Name       string
+	Primary    color.Color // primary brand/action
+	Secondary  color.Color // secondary brand/action
+	Background color.Color // page/app background
+	Surface    color.Color // card, panel, sheet
+	Foreground color.Color // primary text/icons
 
 	// Optional override hook
 	Modify func(p Palette, isDark bool) Palette
@@ -216,47 +296,84 @@ func AvailableThemes() []string {
 // Core Palette Builder
 // -----------------------------------------------------------------------------
 
-func buildPalette(base, sec color.Color, isDark bool) Palette {
-	ld := lipgloss.LightDark(isDark)
-
-	var primary, primaryHover, secondary color.Color
-
+func buildPalette(spec ThemeSpec, isDark bool) Palette {
+	// ── SurfaceRaised: lighten Surface in light mode, darken in dark mode
+	var surfaceRaised color.Color
 	if isDark {
-		primary = lightenHcl(base, 0.12)
-		// Hover: increase both lightness AND chroma for clear affordance
-		primaryHover = saturateHcl(lightenHcl(base, 0.22), 0.85)
-		secondary = lightenHcl(sec, 0.12)
+		surfaceRaised = darkenHcl(spec.Surface, 0.08)
 	} else {
-		primary = base
-		// Hover: darken slightly with chroma boost for clear affordance
-		primaryHover = saturateHcl(darkenHcl(base, 0.08), 0.90)
-		secondary = sec
+		surfaceRaised = lightenHcl(spec.Surface, 0.08)
 	}
 
-	// Fixed status colors for consistent UX - independent of brand
-	// These are recognizable emotional anchors that users expect
-	fixedError := ld(lipgloss.Color("#FF4444"), lipgloss.Color("#CC3333"))   // Red - always red
-	fixedSuccess := ld(lipgloss.Color("#44DD66"), lipgloss.Color("#22AA44")) // Green - always green
-	fixedWarning := ld(lipgloss.Color("#FFAA22"), lipgloss.Color("#DD8800")) // Amber - always amber
-	fixedInfo := ld(lipgloss.Color("#44AAFF"), lipgloss.Color("#2277DD"))    // Blue - always blue
+	// ── Overlay, Border, BorderMuted from Foreground with simulated alpha
+	overlay := withAlpha(spec.Foreground, 0.5)
+	border := withAlpha(spec.Foreground, 0.12)
+	borderMuted := withAlpha(spec.Foreground, 0.06)
+
+	// ── ForegroundMuted, ForegroundSubtle from Foreground
+	foregroundMuted := withAlpha(spec.Foreground, 0.6)
+	foregroundSubtle := withAlpha(spec.Foreground, 0.38)
+
+	// ── OnPrimary, PrimaryMuted from Primary
+	onPrimary := contrastingForeground(spec.Primary)
+	primaryMuted := withAlpha(spec.Primary, 0.12)
+
+	// ── OnSecondary, SecondaryMuted from Secondary
+	onSecondary := contrastingForeground(spec.Secondary)
+	secondaryMuted := withAlpha(spec.Secondary, 0.12)
+
+	// ── Status colors (defaults; can be overridden via Modify)
+	var success, warning, info, errColor color.Color
+	if isDark {
+		success = lipgloss.Color("#44DD66")
+		warning = lipgloss.Color("#FFAA22")
+		info = lipgloss.Color("#44AAFF")
+		errColor = lipgloss.Color("#FF4444")
+	} else {
+		success = lipgloss.Color("#22AA44")
+		warning = lipgloss.Color("#DD8800")
+		info = lipgloss.Color("#2277DD")
+		errColor = lipgloss.Color("#CC3333")
+	}
 
 	return Palette{
-		Primary:         primary,
-		PrimaryHover:    primaryHover,
-		Secondary:       secondary,
-		SubtlePrimary:   desaturateHcl(base, 0.30),
-		SubtleSecondary: desaturateHcl(secondary, 0.30),
-		FocusBorder:     primary,
+		// Core colors (from spec)
+		Primary:    spec.Primary,
+		Secondary:  spec.Secondary,
+		Background: spec.Background,
+		Surface:    spec.Surface,
+		Foreground: spec.Foreground,
 
-		TextPrimary:   ld(lipgloss.Color("#201F26"), lipgloss.Color("#F1EFEF")),
-		TextSecondary: ld(lipgloss.Color("#3A3943"), lipgloss.Color("#DFDBDD")),
-		TextMuted:     ld(lipgloss.Color("#858392"), lipgloss.Color("#605F6B")),
-		TextInverse:   lipgloss.Color("#201F26"),
+		// Computed from Surface
+		SurfaceRaised: surfaceRaised,
+		Overlay:       overlay,
+		Border:        border,
+		BorderMuted:   borderMuted,
 
-		Error:   fixedError,
-		Success: fixedSuccess,
-		Warning: fixedWarning,
-		Info:    fixedInfo,
+		// Computed from Foreground
+		ForegroundMuted:  foregroundMuted,
+		ForegroundSubtle: foregroundSubtle,
+
+		// Computed from Primary
+		OnPrimary:    onPrimary,
+		PrimaryMuted: primaryMuted,
+
+		// Computed from Secondary
+		OnSecondary:    onSecondary,
+		SecondaryMuted: secondaryMuted,
+
+		// Interactive
+		Focus: spec.Primary,
+
+		// Status
+		Success:   success,
+		Error:     errColor,
+		Warning:   warning,
+		Info:      info,
+		OnSuccess: contrastingForeground(success),
+		OnError:   contrastingForeground(errColor),
+		OnWarning: contrastingForeground(warning),
+		OnInfo:    contrastingForeground(info),
 	}
 }
 
@@ -264,27 +381,28 @@ func buildPalette(base, sec color.Color, isDark bool) Palette {
 // Public Factory
 // -----------------------------------------------------------------------------
 
-// defaultBase and defaultSecondary are sentinel colors used when the "default"
-// theme is not registered (e.g. in unusual test isolation or build scenarios).
-var (
-	defaultBase      = lipgloss.Color("#10B1AE")
-	defaultSecondary = lipgloss.Color("#6B50FF")
-)
-
-// NewPalette generates a [Palette] for the named theme.
-// If the name is unknown, it falls back to the "default" theme.
+// NewPalette generates a [Palette] for named theme.
+// If name is unknown, it falls back to "default" theme.
 // If "default" is also not registered, it uses hardcoded sentinel colors.
-// isDark selects the dark or light variant of the palette.
+// isDark selects the dark or light variant.
 func NewPalette(name string, isDark bool) Palette {
 	spec, ok := themeRegistry[name]
 	if !ok {
 		spec, ok = themeRegistry["default"]
 		if !ok {
-			return buildPalette(defaultBase, defaultSecondary, isDark)
+			// Fallback sentinel colors
+			spec = ThemeSpec{
+				Name:       "default",
+				Primary:    lipgloss.Color("#10B1AE"),
+				Secondary:  lipgloss.Color("#6B50FF"),
+				Background: lipgloss.Color("#16161A"),
+				Surface:    lipgloss.Color("#1A1A1F"),
+				Foreground: lipgloss.Color("#F1EFEF"),
+			}
 		}
 	}
 
-	p := buildPalette(spec.Base, spec.Secondary, isDark)
+	p := buildPalette(spec, isDark)
 
 	if spec.Modify != nil {
 		p = spec.Modify(p, isDark)
@@ -298,87 +416,130 @@ func NewPalette(name string, isDark bool) Palette {
 // -----------------------------------------------------------------------------
 
 func init() {
+	// default — teal primary, purple secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "default",
-		Base:      lipgloss.Color("#10B1AE"),
-		Secondary: lipgloss.Color("#6B50FF"),
+		Name:       "default",
+		Primary:    lipgloss.Color("#10B1AE"),
+		Secondary:  lipgloss.Color("#6B50FF"),
+		Background: lipgloss.Color("#16161A"),
+		Surface:    lipgloss.Color("#1A1A1F"),
+		Foreground: lipgloss.Color("#F1EFEF"),
 	})
 
+	// ocean — blue primary, cyan secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "ocean",
-		Base:      lipgloss.Color("#4A90D9"),
-		Secondary: lipgloss.Color("#2BC4C4"),
+		Name:       "ocean",
+		Primary:    lipgloss.Color("#4A90D9"),
+		Secondary:  lipgloss.Color("#2BC4C4"),
+		Background: lipgloss.Color("#0A1628"),
+		Surface:    lipgloss.Color("#111D32"),
+		Foreground: lipgloss.Color("#E8F4FD"),
 	})
 
+	// forest — green primary, amber secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "forest",
-		Base:      lipgloss.Color("#4A7C59"),
-		Secondary: lipgloss.Color("#C9913D"),
+		Name:       "forest",
+		Primary:    lipgloss.Color("#4A7C59"),
+		Secondary:  lipgloss.Color("#C9913D"),
+		Background: lipgloss.Color("#0F1A14"),
+		Surface:    lipgloss.Color("#16241D"),
+		Foreground: lipgloss.Color("#F0F7ED"),
 	})
 
+	// sunset — pink primary, purple secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "sunset",
-		Base:      lipgloss.Color("#FF6B6B"),
-		Secondary: lipgloss.Color("#5F4B8B"),
+		Name:       "sunset",
+		Primary:    lipgloss.Color("#FF6B6B"),
+		Secondary:  lipgloss.Color("#5F4B8B"),
+		Background: lipgloss.Color("#1F1419"),
+		Surface:    lipgloss.Color("#2A1D23"),
+		Foreground: lipgloss.Color("#FFF5F5"),
 	})
 
+	// aurora — purple primary, green secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "aurora",
-		Base:      lipgloss.Color("#7F5AF0"),
-		Secondary: lipgloss.Color("#2CB67D"),
+		Name:       "aurora",
+		Primary:    lipgloss.Color("#7F5AF0"),
+		Secondary:  lipgloss.Color("#2CB67D"),
+		Background: lipgloss.Color("#141420"),
+		Surface:    lipgloss.Color("#1E1D2A"),
+		Foreground: lipgloss.Color("#F5F0FF"),
 	})
 
+	// ember — red primary, gold secondary (custom OnPrimary/OnSecondary)
 	RegisterTheme(ThemeSpec{
-		Name:      "ember",
-		Base:      lipgloss.Color("#8B1E3F"),
-		Secondary: lipgloss.Color("#CFAE70"),
+		Name:       "ember",
+		Primary:    lipgloss.Color("#8B1E3F"),
+		Secondary:  lipgloss.Color("#CFAE70"),
+		Background: lipgloss.Color("#1A0F13"),
+		Surface:    lipgloss.Color("#25161C"),
+		Foreground: lipgloss.Color("#FFF8F0"),
 		Modify: func(p Palette, _ bool) Palette {
-			p.TextInverse = lipgloss.Color("#F1EFEF")
+			p.OnPrimary = lipgloss.Color("#F1EFEF")
+			p.OnSecondary = lipgloss.Color("#201F26")
 			return p
 		},
 	})
 
+	// neon — cyan primary, magenta secondary (bright status, magenta focus)
 	RegisterTheme(ThemeSpec{
-		Name:      "neon",
-		Base:      lipgloss.Color("#00F5D4"),
-		Secondary: lipgloss.Color("#FF00C8"),
+		Name:       "neon",
+		Primary:    lipgloss.Color("#00F5D4"),
+		Secondary:  lipgloss.Color("#FF00C8"),
+		Background: lipgloss.Color("#0A1A1C"),
+		Surface:    lipgloss.Color("#12272A"),
+		Foreground: lipgloss.Color("#F0FFFA"),
 		Modify: func(p Palette, _ bool) Palette {
-			// Neon theme uses brighter, more saturated status colors
+			// Brighter, more saturated status colors
 			p.Error = lipgloss.Color("#FF3B3B")
 			p.Success = lipgloss.Color("#00FF85")
 			p.Warning = lipgloss.Color("#FFD60A")
-			p.Info = lipgloss.Color("#FF00C8")  // Use secondary as info for neon aesthetic
-			p.FocusBorder = lipgloss.Color("#FF00C8") // magenta focus border contrasts the cyan primary
+			p.Info = lipgloss.Color("#FF00C8")
+			p.Focus = lipgloss.Color("#FF00C8") // magenta focus
+			p.OnPrimary = lipgloss.Color("#201F26")
+			p.OnSecondary = lipgloss.Color("#F1EFEF")
 			return p
 		},
 	})
 
+	// slate — blue-grey primary, blue secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "slate",
-		Base:      lipgloss.Color("#3A506B"),
-		Secondary: lipgloss.Color("#1C7ED6"),
+		Name:       "slate",
+		Primary:    lipgloss.Color("#3A506B"),
+		Secondary:  lipgloss.Color("#1C7ED6"),
+		Background: lipgloss.Color("#0F141A"),
+		Surface:    lipgloss.Color("#182029"),
+		Foreground: lipgloss.Color("#E8EDF5"),
 	})
 
-	// sakura — cherry blossom: warm pink primary, lavender secondary
+	// sakura — cherry blossom pink, lavender secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "sakura",
-		Base:      lipgloss.Color("#E87EA1"),
-		Secondary: lipgloss.Color("#9B72CF"),
+		Name:       "sakura",
+		Primary:    lipgloss.Color("#E87EA1"),
+		Secondary:  lipgloss.Color("#9B72CF"),
+		Background: lipgloss.Color("#1F151C"),
+		Surface:    lipgloss.Color("#2C1E27"),
+		Foreground: lipgloss.Color("#FFF5FA"),
 	})
 
-	// nord — arctic palette: polar night blue primary, frost cyan secondary
+	// nord — arctic blue primary, frost cyan secondary
 	RegisterTheme(ThemeSpec{
-		Name:      "nord",
-		Base:      lipgloss.Color("#5E81AC"),
-		Secondary: lipgloss.Color("#88C0D0"),
+		Name:       "nord",
+		Primary:    lipgloss.Color("#5E81AC"),
+		Secondary:  lipgloss.Color("#88C0D0"),
+		Background: lipgloss.Color("#10171E"),
+		Surface:    lipgloss.Color("#19222D"),
+		Foreground: lipgloss.Color("#ECEFF4"),
 	})
 
-	// mono — monochrome minimal: mid-gray primary, lighter gray secondary
-	// Status colors (error/success/warning/info) remain colored for clarity.
+	// mono — monochrome minimal
 	RegisterTheme(ThemeSpec{
-		Name:      "mono",
-		Base:      lipgloss.Color("#787878"),
-		Secondary: lipgloss.Color("#A8A8A8"),
+		Name:       "mono",
+		Primary:    lipgloss.Color("#787878"),
+		Secondary:  lipgloss.Color("#A8A8A8"),
+		Background: lipgloss.Color("#121212"),
+		Surface:    lipgloss.Color("#1C1C1C"),
+		Foreground: lipgloss.Color("#E8E8E8"),
 	})
 }
 
@@ -404,26 +565,26 @@ func newStylesFromPalette(p Palette, width int) Styles {
 
 	return Styles{
 		MaxWidth: maxWidth,
-		App:      lipgloss.NewStyle().Width(maxWidth).Padding(0, 0),
-		Header:   lipgloss.NewStyle().Padding(2).MarginBottom(0).PaddingBottom(0),
+		App:      lipgloss.NewStyle().Width(maxWidth).Padding(0, 0).Background(p.Background),
+		Header:   lipgloss.NewStyle().Padding(2).MarginBottom(0).PaddingBottom(0).Background(p.Surface),
 		PlainTitle: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(p.Primary).
 			Border(lipgloss.NormalBorder(), false, false, true, false).
 			BorderForeground(p.Secondary).
 			PaddingBottom(1),
-		Body: lipgloss.NewStyle().Padding(0, 3).Foreground(p.TextPrimary),
+		Body: lipgloss.NewStyle().Padding(0, 3).Foreground(p.Foreground),
 		Help: lipgloss.NewStyle().MarginTop(0).Padding(0, 3),
 		Footer: lipgloss.NewStyle().
 			MarginTop(1).
 			Border(lipgloss.RoundedBorder(), true).
-			BorderForeground(p.TextMuted).
+			BorderForeground(p.Border).
 			PaddingLeft(1),
 		StatusLeft: lipgloss.NewStyle().
-			Background(p.SubtlePrimary).
-			Foreground(p.TextInverse).
+			Background(p.PrimaryMuted).
+			Foreground(p.OnPrimary).
 			Bold(true),
-		StatusRight: lipgloss.NewStyle().Foreground(p.TextMuted),
+		StatusRight: lipgloss.NewStyle().Foreground(p.ForegroundSubtle),
 	}
 }
 
@@ -449,8 +610,8 @@ type DetailStyles struct {
 func newDetailStylesFromPalette(p Palette) DetailStyles {
 	return DetailStyles{
 		Title:   lipgloss.NewStyle().Bold(true).Foreground(p.Primary).MarginBottom(1),
-		Desc:    lipgloss.NewStyle().Foreground(p.SubtleSecondary).MarginBottom(2),
-		Content: lipgloss.NewStyle().Foreground(p.TextPrimary),
+		Desc:    lipgloss.NewStyle().Foreground(p.SecondaryMuted).MarginBottom(2),
+		Content: lipgloss.NewStyle().Foreground(p.Foreground),
 		Info:    lipgloss.NewStyle().Foreground(p.Primary).Italic(true).MarginBottom(1),
 	}
 }
@@ -477,11 +638,12 @@ type ModalStyles struct {
 func newModalStylesFromPalette(p Palette) ModalStyles {
 	return ModalStyles{
 		Title: lipgloss.NewStyle().Bold(true).Foreground(p.Primary),
-		Body:  lipgloss.NewStyle().Foreground(p.TextPrimary),
-		Hint:  lipgloss.NewStyle().Foreground(p.TextMuted).Italic(true),
+		Body:  lipgloss.NewStyle().Foreground(p.Foreground),
+		Hint:  lipgloss.NewStyle().Foreground(p.ForegroundSubtle).Italic(true),
 		Dialog: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(p.Primary).
+			Background(p.SurfaceRaised).
 			Padding(1, 2).
 			Width(52),
 	}
@@ -517,18 +679,18 @@ func ListStyles(p Palette) list.Styles {
 
 	s.TitleBar = lipgloss.NewStyle().Padding(0, 0, 1, 2)
 	s.Title = lipgloss.NewStyle().
-		Background(p.PrimaryHover).
-		Foreground(p.TextInverse).
+		Background(p.Primary).
+		Foreground(p.OnPrimary).
 		Padding(0, 1)
 	s.Spinner = lipgloss.NewStyle().Foreground(p.Primary)
-	s.PaginationStyle = lipgloss.NewStyle().Foreground(p.TextMuted).PaddingLeft(2)
-	s.HelpStyle = lipgloss.NewStyle().Foreground(p.TextSecondary).Padding(1, 0, 0, 2)
-	s.StatusBar = lipgloss.NewStyle().Foreground(p.TextSecondary).Padding(0, 0, 1, 2)
-	s.StatusEmpty = lipgloss.NewStyle().Foreground(p.TextMuted)
-	s.NoItems = lipgloss.NewStyle().Foreground(p.TextSecondary)
+	s.PaginationStyle = lipgloss.NewStyle().Foreground(p.ForegroundSubtle).PaddingLeft(2)
+	s.HelpStyle = lipgloss.NewStyle().Foreground(p.ForegroundMuted).Padding(1, 0, 0, 2)
+	s.StatusBar = lipgloss.NewStyle().Foreground(p.ForegroundMuted).Padding(0, 0, 1, 2)
+	s.StatusEmpty = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)
+	s.NoItems = lipgloss.NewStyle().Foreground(p.ForegroundMuted)
 	s.ActivePaginationDot = lipgloss.NewStyle().Foreground(p.Primary).SetString("•")
-	s.InactivePaginationDot = lipgloss.NewStyle().Foreground(p.TextMuted).SetString("•")
-	s.DividerDot = lipgloss.NewStyle().Foreground(p.TextMuted).SetString(" • ")
+	s.InactivePaginationDot = lipgloss.NewStyle().Foreground(p.ForegroundSubtle).SetString("•")
+	s.DividerDot = lipgloss.NewStyle().Foreground(p.ForegroundSubtle).SetString(" • ")
 
 	return s
 }
@@ -539,17 +701,17 @@ func ListItemStyles(p Palette) list.DefaultItemStyles {
 
 	// Normal state (unfocused items)
 	s.NormalTitle = lipgloss.NewStyle().Foreground(p.Primary)
-	s.NormalDesc = lipgloss.NewStyle().Foreground(p.TextMuted)
+	s.NormalDesc = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)
 
 	// Selected state (focused item)
 	s.SelectedTitle = lipgloss.NewStyle().
-		Foreground(p.PrimaryHover).
+		Foreground(p.Primary).
 		Bold(true)
-	s.SelectedDesc = lipgloss.NewStyle().Foreground(p.SubtleSecondary)
+	s.SelectedDesc = lipgloss.NewStyle().Foreground(p.SecondaryMuted)
 
 	// Dimmed state (when filter input is activated)
-	s.DimmedTitle = lipgloss.NewStyle().Foreground(p.TextMuted)
-	s.DimmedDesc = lipgloss.NewStyle().Foreground(p.TextMuted)
+	s.DimmedTitle = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)
+	s.DimmedDesc = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)
 
 	// Filter match
 	s.FilterMatch = lipgloss.NewStyle().Foreground(p.Primary)

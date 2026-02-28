@@ -48,10 +48,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.footerSty = lipgloss.NewStyle().
 			MarginTop(1).
 			Border(lipgloss.RoundedBorder(), true).
-			BorderForeground(p.TextMuted).
+			BorderForeground(p.Border).
 			PaddingLeft(1)
 
-		m.rightSty = lipgloss.NewStyle().Foreground(p.TextMuted)
+		m.rightSty = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)
 
 		// Mirror the MaxWidth calculation from theme.newStylesFromPalette so that
 		// the gap arithmetic matches the rest of the layout.

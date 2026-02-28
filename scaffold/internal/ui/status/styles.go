@@ -20,11 +20,11 @@ func NewStyles(p theme.Palette) Styles {
 	base := lipgloss.NewStyle().Bold(true).Padding(0, 1)
 
 	return Styles{
-		Base:    base.Background(p.Primary).Foreground(p.TextInverse),
-		Info:    base.Background(p.Info).Foreground(p.TextInverse),
-		Success: base.Background(p.Success).Foreground(p.TextInverse),
-		Warning: base.Background(p.Warning).Foreground(p.TextInverse),
-		Error:   base.Background(p.Error).Foreground(p.TextInverse),
+		Base:    base.Background(p.Primary).Foreground(p.OnPrimary),
+		Info:    base.Background(p.Info).Foreground(p.OnInfo),
+		Success: base.Background(p.Success).Foreground(p.OnSuccess),
+		Warning: base.Background(p.Warning).Foreground(p.OnWarning),
+		Error:   base.Background(p.Error).Foreground(p.OnError),
 	}
 }
 

@@ -133,12 +133,12 @@ func (s *Settings) initTabStyles() {
 	p := s.Palette()
 	s.tabStyles = tabStyles{
 		active: lipgloss.NewStyle().
-			Foreground(p.TextInverse).
+			Foreground(p.OnPrimary).
 			Background(p.Primary).
 			Bold(true).
 			Padding(0, 1),
 		inactive: lipgloss.NewStyle().
-			Foreground(p.TextMuted).
+			Foreground(p.ForegroundSubtle).
 			Padding(0, 1),
 		tabBar: lipgloss.NewStyle().
 			Padding(0, 1).
