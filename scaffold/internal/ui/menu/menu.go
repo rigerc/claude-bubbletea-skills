@@ -181,11 +181,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // View renders the menu.
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if !m.ready {
-		return ""
+		return tea.NewView("")
 	}
-	return m.list.View()
+	return tea.NewView(m.list.View())
 }
 
 // KeyBindings returns the key bindings for help display.

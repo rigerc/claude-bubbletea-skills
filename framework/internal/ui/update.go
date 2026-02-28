@@ -21,10 +21,25 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleThemeChanged(msg)
 	case router.NavigateMsg:
 		cmd := m.router.Navigate(msg.Screen)
-		return m, cmd
+		// Send current theme to new screen
+		themeCmd := func() tea.Msg {
+			return theme.ThemeChangedMsg{
+				Colors: m.registry.Colors(),
+				Name:   m.registry.CurrentName(),
+				IsDark: m.registry.IsDark(),
+			}
+		}
+		return m, tea.Batch(cmd, themeCmd)
 	case router.BackMsg:
 		m.router.Back()
-		return m, nil
+		// Send current theme to restored screen
+		return m, func() tea.Msg {
+			return theme.ThemeChangedMsg{
+				Colors: m.registry.Colors(),
+				Name:   m.registry.CurrentName(),
+				IsDark: m.registry.IsDark(),
+			}
+		}
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	default:
@@ -35,7 +50,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m rootModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
-	m.help.SetWidth(msg.Width - 2) // account for footer padding
+	m.help.SetWidth(msg.Width - 2)
 	m.styles = theme.NewStyles(m.registry.Colors(), m.width)
 	m.ready = true
 	return m.routeToScreen(msg)

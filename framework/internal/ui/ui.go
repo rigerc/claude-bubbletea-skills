@@ -6,7 +6,7 @@ import (
 	"framework/internal/screens"
 )
 
-// New creates the root model with the home screen as the initial view.
+// New creates the root model with the home screen as initial view.
 func New() tea.Model {
 	return newRootModel(screens.NewHome())
 }

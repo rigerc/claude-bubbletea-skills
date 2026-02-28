@@ -157,15 +157,16 @@ func (m rootModel) View() tea.View {
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		m.header.View(),
+		m.header.View().Content,
 		m.styles.Body.Height(m.bodyH).MaxHeight(m.bodyH).Render(m.current.Body()),
 		m.helpView(),
-		m.statusbar.View(),
+		m.statusbar.View().Content,
 	)
 
 	base := m.styles.App.Render(content)
+
 	if m.modal.Visible() {
-		return tea.NewView(modal.Overlay(base, m.modal.View(), m.width, m.height))
+		return tea.NewView(modal.Overlay(base, m.modal.View().Content, m.width, m.height))
 	}
 	return tea.NewView(base)
 }

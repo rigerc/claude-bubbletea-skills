@@ -36,8 +36,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // View renders the current spinner frame.
-func (m Model) View() string {
-	return m.s.View()
+func (m Model) View() tea.View {
+	return tea.NewView(m.s.View())
 }
 
 // Loading combines a spinner with an active flag. Embed it in any screen that
@@ -88,6 +88,6 @@ func (l Loading) Update(msg tea.Msg) (Loading, tea.Cmd) {
 // The dot uses the secondary colour (set on New); the label uses primary.
 func (l Loading) View(label string, p theme.Palette) string {
 	text := lipgloss.NewStyle().Foreground(p.Primary).Render(label)
-	inner := l.spin.View() + text
+	inner := l.spin.View().Content + text
 	return lipgloss.NewStyle().Padding(2).Render(inner)
 }

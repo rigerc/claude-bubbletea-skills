@@ -26,7 +26,7 @@ type Home struct {
 	theme.ThemeAware
 
 	width int
-	menu  *menu.Model
+	menu  menu.Model
 	ready bool
 }
 
@@ -40,7 +40,7 @@ func NewHome() *Home {
 		menu.NewItem("About", "About this application", "about"),
 	})
 	return &Home{
-		menu: &m,
+		menu: m,
 	}
 }
 
@@ -52,7 +52,7 @@ func (h *Home) SetWidth(w int) Screen {
 	if height == 0 {
 		height = 10 // fallback
 	}
-	*h.menu = h.menu.SetSize(w-6, height)
+	h.menu = h.menu.SetSize(w - 6, height)
 	return h
 }
 
@@ -70,7 +70,7 @@ func (h *Home) Init() tea.Cmd {
 // Update handles messages for the home screen.
 func (h *Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	*h.menu, cmd = h.menu.Update(msg)
+	h.menu, cmd = h.menu.Update(msg)
 	return h, cmd
 }
 
@@ -81,7 +81,7 @@ func (h *Home) View() tea.View {
 
 // Body returns the body content for layout composition.
 func (h *Home) Body() string {
-	return h.menu.View()
+	return h.menu.View().Content
 }
 
 // ShortHelp returns short help key bindings for the home screen.

@@ -8,12 +8,6 @@ import (
 	"framework/internal/theme"
 )
 
-// NavItem defines a top-level navigation destination.
-type NavItem struct {
-	Label  string
-	Screen func() router.Screen // factory — creates a fresh screen on navigation
-}
-
 type rootModel struct {
 	router   *router.Router
 	registry *theme.Registry
@@ -21,35 +15,36 @@ type rootModel struct {
 	help     help.Model
 	keys     globalKeyMap
 
-	navItems  []NavItem
-	navCursor int
-
 	width  int
 	height int
 	ready  bool
 }
 
-func newRootModel(navItems []NavItem) rootModel {
-	if len(navItems) == 0 {
-		panic("at least one nav item required")
-	}
-
+func newRootModel(initial router.Screen) rootModel {
 	reg := theme.NewRegistry()
 	colors := reg.Colors()
 
 	return rootModel{
-		router:   router.New(navItems[0].Screen()),
+		router:   router.New(initial),
 		registry: reg,
 		styles:   theme.NewStyles(colors, 0),
 		keys:     defaultGlobalKeyMap(),
 		help:     help.New(),
-		navItems: navItems,
 	}
 }
 
 func (m rootModel) Init() tea.Cmd {
+	// Send initial theme state immediately so screens have colors on first render
+	initialTheme := func() tea.Msg {
+		return theme.ThemeChangedMsg{
+			Colors: m.registry.Colors(),
+			Name:   m.registry.CurrentName(),
+			IsDark: m.registry.IsDark(),
+		}
+	}
 	return tea.Batch(
 		tea.RequestBackgroundColor,
+		initialTheme,
 		m.router.Current().Init(),
 	)
 }

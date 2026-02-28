@@ -79,16 +79,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 // The ASCII banner is shown only when ShowBanner is enabled, the banner has
 // been rendered, and the terminal is wide enough. Otherwise a plain title is
 // shown.
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if m.cfg.UI.ShowBanner && m.banner != "" && m.width > 0 && m.width >= lipgloss.Width(m.banner) {
-		return m.headerSty.Render(m.banner)
+		return tea.NewView(m.headerSty.Render(m.banner))
 	}
-	return m.headerSty.Render(m.titleSty.Render(m.cfg.App.Name))
+	return tea.NewView(m.headerSty.Render(m.titleSty.Render(m.cfg.App.Name)))
 }
 
 // Height returns the number of terminal lines the header occupies.
 func (m Model) Height() int {
-	return lipgloss.Height(m.View())
+	return lipgloss.Height(m.View().Content)
 }
 
 // renderBannerStr renders the ASCII art banner at a fixed large width and

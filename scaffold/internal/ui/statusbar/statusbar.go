@@ -72,7 +72,7 @@ func (m Model) State() status.State {
 }
 
 // View renders the full footer: left status badge + spacer + right version text.
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	left := m.statusSty.Render(m.state.Text, m.state.Kind)
 
 	rightContent := " v" + m.cfg.App.Version
@@ -87,5 +87,5 @@ func (m Model) View() string {
 	gap := lipgloss.NewStyle().Width(gapW).Render("")
 
 	footerContent := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
-	return m.footerSty.Render(footerContent)
+	return tea.NewView(m.footerSty.Render(footerContent))
 }

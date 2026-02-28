@@ -118,7 +118,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // View renders the dialog box.
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	var rows []string
 	rows = append(rows, m.styles.Title.Render(m.title))
 	if m.body != "" {
@@ -139,7 +139,7 @@ func (m Model) View() string {
 	}
 
 	inner := lipgloss.JoinVertical(lipgloss.Left, rows...)
-	return m.styles.Dialog.Render(inner)
+	return tea.NewView(m.styles.Dialog.Render(inner))
 }
 
 // ShowConfirm returns a Cmd that triggers a confirm (Yes/No) modal.

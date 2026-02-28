@@ -137,7 +137,7 @@ func (d *Detail) Body() string {
 		d.styles.Title.Render(d.title),
 		d.styles.Desc.Render(d.description),
 		d.styles.Content.Render(fmt.Sprintf("Screen ID: %s", d.screenID)),
-		"",
+		"Test",
 		d.styles.Info.Render("Press Esc to go back to the menu"),
 	)
 
