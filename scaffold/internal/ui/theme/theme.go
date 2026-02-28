@@ -1,3 +1,6 @@
+// Package theme manages application color themes, including palette generation,
+// perceptually uniform color manipulation, and lipgloss/huh style construction.
+// Themes are registered via [RegisterTheme] and queried through [NewPalette].
 package theme
 
 import (
@@ -73,21 +76,6 @@ func colorDistance(c1, c2 color.Color) float64 {
 		return 1.0 // Max distance for invalid colors
 	}
 	return cf1.DistanceCIEDE2000(cf2)
-}
-
-// Backward-compatible aliases using HCL internally.
-// These replace the original HSL-based implementations.
-
-// desaturate returns c with its chroma reduced to s (0-1).
-// Uses HCL for perceptually uniform desaturation.
-func desaturate(c color.Color, s float64) color.Color {
-	return desaturateHcl(c, s)
-}
-
-// saturate returns c with its chroma set to s (0-1).
-// Uses HCL for perceptually uniform saturation.
-func saturate(c color.Color, s float64) color.Color {
-	return saturateHcl(c, s)
 }
 
 // -----------------------------------------------------------------------------
@@ -188,6 +176,9 @@ type Palette struct {
 // Available Themes
 // -----------------------------------------------------------------------------
 
+// ThemeSpec defines a named theme by its base and secondary seed colors.
+// Register themes with [RegisterTheme] before calling [NewPalette].
+// An optional Modify hook can adjust the generated Palette after derivation.
 type ThemeSpec struct {
 	Name      string
 	Base      color.Color
@@ -203,10 +194,14 @@ var themeRegistry = map[string]ThemeSpec{}
 // Registration
 // -----------------------------------------------------------------------------
 
+// RegisterTheme adds spec to the global theme registry.
+// Call this in an init function before the TUI starts.
+// RegisterTheme is not concurrency-safe; call only from init().
 func RegisterTheme(spec ThemeSpec) {
 	themeRegistry[spec.Name] = spec
 }
 
+// AvailableThemes returns the sorted names of all registered themes.
 func AvailableThemes() []string {
 	names := make([]string, 0, len(themeRegistry))
 	for name := range themeRegistry {
@@ -248,8 +243,8 @@ func buildPalette(base, sec color.Color, isDark bool) Palette {
 		Primary:         primary,
 		PrimaryHover:    primaryHover,
 		Secondary:       secondary,
-		SubtlePrimary:   desaturate(base, 0.30),
-		SubtleSecondary: desaturate(secondary, 0.30),
+		SubtlePrimary:   desaturateHcl(base, 0.30),
+		SubtleSecondary: desaturateHcl(secondary, 0.30),
 
 		TextPrimary:   ld(lipgloss.Color("#201F26"), lipgloss.Color("#F1EFEF")),
 		TextSecondary: ld(lipgloss.Color("#3A3943"), lipgloss.Color("#DFDBDD")),
@@ -267,10 +262,24 @@ func buildPalette(base, sec color.Color, isDark bool) Palette {
 // Public Factory
 // -----------------------------------------------------------------------------
 
+// defaultBase and defaultSecondary are sentinel colors used when the "default"
+// theme is not registered (e.g. in unusual test isolation or build scenarios).
+var (
+	defaultBase      = lipgloss.Color("#10B1AE")
+	defaultSecondary = lipgloss.Color("#6B50FF")
+)
+
+// NewPalette generates a [Palette] for the named theme.
+// If the name is unknown, it falls back to the "default" theme.
+// If "default" is also not registered, it uses hardcoded sentinel colors.
+// isDark selects the dark or light variant of the palette.
 func NewPalette(name string, isDark bool) Palette {
 	spec, ok := themeRegistry[name]
 	if !ok {
-		spec = themeRegistry["default"]
+		spec, ok = themeRegistry["default"]
+		if !ok {
+			return buildPalette(defaultBase, defaultSecondary, isDark)
+		}
 	}
 
 	p := buildPalette(spec.Base, spec.Secondary, isDark)

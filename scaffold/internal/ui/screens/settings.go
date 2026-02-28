@@ -7,8 +7,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/paginator"
-	"charm.land/huh/v2"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 
 	"scaffold/config"
@@ -279,7 +279,7 @@ func buildFormForGroup(g config.GroupMeta) *huh.Form {
 		}
 	}
 	if len(fields) > 0 {
-		return huh.NewForm(huh.NewGroup(fields...).Title(g.Label))
+		return huh.NewForm(huh.NewGroup(fields...))
 	}
 	return huh.NewForm()
 }

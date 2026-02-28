@@ -63,15 +63,38 @@ type UIConfig struct {
 }
 
 // AppConfig contains general application configuration.
+// This struct is excluded from the settings UI (cfg_exclude:"true" on the parent field).
 type AppConfig struct {
 	// Name is the application name.
-	Name string `json:"name" mapstructure:"name" koanf:"name" cfg_label:"App Name" cfg_desc:"Displayed in the banner"`
+	Name string `json:"name" mapstructure:"name" koanf:"name"`
 
 	// Description is the application description.
-	Description string `json:"description" mapstructure:"description" koanf:"description" cfg_label:"App Description" cfg_desc:"Displayed in the banner"`
+	Description string `json:"description" mapstructure:"description" koanf:"description"`
 
 	// Version is the application version.
-	Version string `json:"version" mapstructure:"version" koanf:"version" cfg_label:"Version" cfg_readonly:"true"`
+	Version string `json:"version" mapstructure:"version" koanf:"version"`
+}
+
+// loadDefaults populates k with values from DefaultConfig.
+// Called first by both Load and LoadFromBytes so that new Config fields
+// always have a valid baseline before user data is merged on top.
+func loadDefaults(k *koanf.Koanf) error {
+	defaults := DefaultConfig()
+	return k.Load(confmap.Provider(map[string]any{
+		"configVersion": defaults.ConfigVersion,
+		"logLevel":      defaults.LogLevel,
+		"debug":         defaults.Debug,
+		"ui": map[string]any{
+			"mouseEnabled": defaults.UI.MouseEnabled,
+			"themeName":    defaults.UI.ThemeName,
+			"showBanner":   defaults.UI.ShowBanner,
+		},
+		"app": map[string]any{
+			"name":        defaults.App.Name,
+			"description": defaults.App.Description,
+			"version":     defaults.App.Version,
+		},
+	}, "."), nil)
 }
 
 // Load reads configuration from the specified file path.
@@ -89,22 +112,7 @@ func Load(path string) (*Config, error) {
 	k := koanf.New(".")
 
 	// 1. Load defaults first
-	defaults := DefaultConfig()
-	if err := k.Load(confmap.Provider(map[string]any{
-		"configVersion": defaults.ConfigVersion,
-		"logLevel":      defaults.LogLevel,
-		"debug":         defaults.Debug,
-		"ui": map[string]any{
-			"mouseEnabled": defaults.UI.MouseEnabled,
-			"themeName":    defaults.UI.ThemeName,
-			"showBanner":   defaults.UI.ShowBanner,
-		},
-		"app": map[string]any{
-			"name":        defaults.App.Name,
-			"description": defaults.App.Description,
-			"version":     defaults.App.Version,
-		},
-	}, "."), nil); err != nil {
+	if err := loadDefaults(k); err != nil {
 		return nil, fmt.Errorf("loading defaults: %w", err)
 	}
 
@@ -136,22 +144,7 @@ func LoadFromBytes(data []byte) (*Config, error) {
 	k := koanf.New(".")
 
 	// 1. Load defaults first
-	defaults := DefaultConfig()
-	if err := k.Load(confmap.Provider(map[string]any{
-		"configVersion": defaults.ConfigVersion,
-		"logLevel":      defaults.LogLevel,
-		"debug":         defaults.Debug,
-		"ui": map[string]any{
-			"mouseEnabled": defaults.UI.MouseEnabled,
-			"themeName":    defaults.UI.ThemeName,
-			"showBanner":   defaults.UI.ShowBanner,
-		},
-		"app": map[string]any{
-			"name":        defaults.App.Name,
-			"description": defaults.App.Description,
-			"version":     defaults.App.Version,
-		},
-	}, "."), nil); err != nil {
+	if err := loadDefaults(k); err != nil {
 		return nil, fmt.Errorf("loading defaults: %w", err)
 	}
 
