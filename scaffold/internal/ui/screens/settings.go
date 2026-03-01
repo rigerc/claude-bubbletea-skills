@@ -221,7 +221,7 @@ func (s *Settings) ApplyTheme(state theme.State) {
 // buildForm constructs the settings form with the given theme applied.
 func (s *Settings) buildForm(themeName string) *huh.Form {
 	f := buildFormForAllGroups(s.groups).
-		WithTheme(theme.HuhTheme(themeName)).
+		WithTheme(theme.HuhTheme(themeName, s.maxLabelWidth())).
 		WithKeyMap(s.huhKeys).
 		WithShowHelp(false).
 		WithHeight(s.RequiredHeight())
@@ -229,6 +229,19 @@ func (s *Settings) buildForm(themeName string) *huh.Form {
 		f = f.WithWidth(s.width)
 	}
 	return f
+}
+
+// maxLabelWidth returns the longest field label length across all groups.
+func (s *Settings) maxLabelWidth() int {
+	max := 0
+	for _, g := range s.groups {
+		for _, f := range g.Fields {
+			if len(f.Label) > max {
+				max = len(f.Label)
+			}
+		}
+	}
+	return max
 }
 
 // Init initializes the settings form.
@@ -373,7 +386,7 @@ func buildField(m config.FieldMeta) huh.Field {
 		}
 		return huh.NewSelect[string]().
 			Key(m.Key).Title(m.Label).
-			Inline(true).
+			Inline(true).Height(3).
 			Options(opts...).
 			Accessor(&reflectAccessor[string]{v: m.Value})
 	case config.FieldConfirm:

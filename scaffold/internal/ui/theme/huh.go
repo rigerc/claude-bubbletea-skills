@@ -7,7 +7,9 @@ import (
 
 // HuhTheme returns a huh.Theme that matches the application palette for the given theme name.
 // Uses huh.ThemeFunc so huh drives isDark on every View() call.
-func HuhTheme(name string) huh.Theme {
+// labelWidth pins the title style to a fixed width when > 0, creating a two-column layout
+// where all field values align to the same column.
+func HuhTheme(name string, labelWidth int) huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		p := NewPalette(name, isDark)
 		s := huh.ThemeCharm(isDark)
@@ -18,7 +20,11 @@ func HuhTheme(name string) huh.Theme {
 			BorderTop(false).BorderRight(false).BorderBottom(false).BorderLeft(true).
 			BorderForeground(p.Focus)
 		s.Focused.Card = s.Focused.Base
-		s.Focused.Title = s.Focused.Title.Foreground(p.Primary).Bold(true).MarginRight(1)
+		focusedTitle := s.Focused.Title.Foreground(p.Primary).Bold(true).MarginRight(1)
+		if labelWidth > 0 {
+			focusedTitle = focusedTitle.Width(labelWidth)
+		}
+		s.Focused.Title = focusedTitle
 		s.Focused.NoteTitle = s.Focused.NoteTitle.Foreground(p.Primary).Bold(true)
 		s.Focused.Directory = s.Focused.Directory.Foreground(p.Primary)
 		s.Focused.Description = s.Focused.Description.Foreground(p.ForegroundMuted)
@@ -43,7 +49,11 @@ func HuhTheme(name string) huh.Theme {
 
 		s.Blurred = s.Focused
 		s.Blurred.Base = s.Focused.Base.BorderStyle(lipgloss.HiddenBorder()).Padding(0, 1, 0, 2)
-		s.Blurred.Title = s.Blurred.Title.Foreground(p.ForegroundSubtle)
+		blurredTitle := s.Blurred.Title.Foreground(p.ForegroundSubtle)
+		if labelWidth > 0 {
+			blurredTitle = blurredTitle.Width(labelWidth)
+		}
+		s.Blurred.Title = blurredTitle
 		s.Blurred.Card = s.Blurred.Base
 		s.Blurred.SelectedOption = s.Blurred.SelectedOption.Foreground(p.ForegroundMuted).Background(p.PrimaryMuted).Padding(0, 1)
 		s.Blurred.NextIndicator = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)

@@ -6,8 +6,6 @@
 version: 2
 updates:
   - package-ecosystem: "gomod" # See documentation for possible values
-    directories:
-     - "/scaffold" # Location of package manifests
-     - "/framework" # Location of package manifests
+    directory: "/scaffold"
     schedule:
       interval: "weekly"
