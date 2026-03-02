@@ -111,7 +111,7 @@ func (s *Settings) ApplyTheme(state theme.State) {
 // buildForm constructs the settings form with the given theme applied.
 func (s *Settings) buildForm(themeName string) *huh.Form {
 	return buildFormForAllGroups(s.groups).
-		WithTheme(theme.HuhTheme(themeName, 0, 0)).
+		WithTheme(theme.HuhTheme(themeName)).
 		WithKeyMap(s.huhKeys).
 		WithShowHelp(false)
 }

@@ -9,10 +9,7 @@ import (
 // Uses huh.ThemeFunc so huh drives isDark on every View() call.
 // Focused elements use Primary, unfocused use Secondary, descriptions use ForegroundMuted.
 // No background colors are applied.
-// labelWidth pins the title style to a fixed width when > 0, and descWidth pins
-// the description style, creating a multi-column layout where all field values
-// align to the same vertical column.
-func HuhTheme(name string, labelWidth, descWidth int) huh.Theme {
+func HuhTheme(name string) huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		p := NewPalette(name, isDark)
 		t := huh.ThemeCharm(isDark)
@@ -23,7 +20,7 @@ func HuhTheme(name string, labelWidth, descWidth int) huh.Theme {
 		t.Focused.Title = t.Focused.Title.Foreground(p.Primary)
 		t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(p.Primary)
 		t.Focused.Directory = t.Focused.Directory.Foreground(p.Primary)
-		t.Focused.Description = t.Focused.Description.Foreground(p.ForegroundMuted).MarginLeft(5)
+		t.Focused.Description = t.Focused.Description.Foreground(p.ForegroundMuted)
 		t.Focused.ErrorIndicator = t.Focused.ErrorIndicator.Foreground(p.Error)
 		t.Focused.ErrorMessage = t.Focused.ErrorMessage.Foreground(p.Error)
 		t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(p.Primary)
