@@ -23,7 +23,7 @@ func HuhTheme(name string, labelWidth, descWidth int) huh.Theme {
 		t.Focused.Title = t.Focused.Title.Foreground(p.Primary)
 		t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(p.Primary)
 		t.Focused.Directory = t.Focused.Directory.Foreground(p.Primary)
-		t.Focused.Description = t.Focused.Description.Foreground(p.ForegroundMuted)
+		t.Focused.Description = t.Focused.Description.Foreground(p.ForegroundMuted).MarginLeft(5)
 		t.Focused.ErrorIndicator = t.Focused.ErrorIndicator.Foreground(p.Error)
 		t.Focused.ErrorMessage = t.Focused.ErrorMessage.Foreground(p.Error)
 		t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(p.Primary)

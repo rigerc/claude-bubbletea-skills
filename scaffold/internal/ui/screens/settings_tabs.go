@@ -3,8 +3,6 @@ package screens
 import (
 	"strings"
 
-	"scaffold/config"
-
 	"charm.land/lipgloss/v2"
 )
 
@@ -79,22 +77,3 @@ func (s *Settings) syncCurrentGroup() {
 	}
 }
 
-// requiredHeight calculates the minimum height needed to display the form.
-func requiredHeight(groups []config.GroupMeta) int {
-	const (
-		fieldHeight  = 1
-		groupHeader  = 2
-		submitHeight = 2
-		tabBarHeight = 2
-	)
-
-	total := submitHeight
-	if len(groups) > 1 {
-		total += tabBarHeight
-	}
-	for _, g := range groups {
-		total += groupHeader
-		total += len(g.Fields) * fieldHeight
-	}
-	return total
-}

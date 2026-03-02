@@ -86,28 +86,15 @@ func NewSettings(cfg config.Config) *Settings {
 	return s
 }
 
-// RequiredHeight returns the minimum height needed to display the form.
-func (s *Settings) RequiredHeight() int {
-	return requiredHeight(s.groups)
-}
-
 // SetWidth sets the screen width.
 func (s *Settings) SetWidth(w int) Screen {
 	s.width = w
-	s.form = s.form.WithWidth(w)
 	return s
 }
 
-// SetHeight sets the available body height. The form height is capped at
-// RequiredHeight() so all fields are visible when space permits, and huh
-// handles internal scrolling when the terminal is shorter.
+// SetHeight sets the available body height.
 func (s *Settings) SetHeight(h int) Screen {
 	s.height = h
-	formH := s.RequiredHeight()
-	if h > 0 && h < formH {
-		formH = h
-	}
-	s.form = s.form.WithHeight(formH)
 	return s
 }
 
@@ -123,18 +110,10 @@ func (s *Settings) ApplyTheme(state theme.State) {
 
 // buildForm constructs the settings form with the given theme applied.
 func (s *Settings) buildForm(themeName string) *huh.Form {
-	f := buildFormForAllGroups(s.groups).
-		WithTheme(theme.HuhTheme(themeName, maxLabelWidth(s.groups), maxDescWidth(s.groups))).
+	return buildFormForAllGroups(s.groups).
+		WithTheme(theme.HuhTheme(themeName, 0, 0)).
 		WithKeyMap(s.huhKeys).
 		WithShowHelp(false)
-	if s.height > 0 {
-		formH := s.RequiredHeight()
-		if s.height < formH {
-			formH = s.height
-		}
-		f = f.WithHeight(formH)
-	}
-	return f
 }
 
 // Init initializes the settings form.
