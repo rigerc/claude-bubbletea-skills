@@ -221,7 +221,7 @@ func (s *Settings) ApplyTheme(state theme.State) {
 // buildForm constructs the settings form with the given theme applied.
 func (s *Settings) buildForm(themeName string) *huh.Form {
 	f := buildFormForAllGroups(s.groups).
-		WithTheme(theme.HuhTheme(themeName, s.maxLabelWidth())).
+		WithTheme(theme.HuhTheme(themeName, s.maxLabelWidth(), s.maxDescWidth())).
 		WithKeyMap(s.huhKeys).
 		WithShowHelp(false).
 		WithHeight(s.RequiredHeight())
@@ -238,6 +238,19 @@ func (s *Settings) maxLabelWidth() int {
 		for _, f := range g.Fields {
 			if len(f.Label) > max {
 				max = len(f.Label)
+			}
+		}
+	}
+	return max
+}
+
+// maxDescWidth returns the longest field description length across all groups.
+func (s *Settings) maxDescWidth() int {
+	max := 0
+	for _, g := range s.groups {
+		for _, f := range g.Fields {
+			if len(f.Desc) > max {
+				max = len(f.Desc)
 			}
 		}
 	}
@@ -363,7 +376,7 @@ func buildFormForAllGroups(groups []config.GroupMeta) *huh.Form {
 			}
 		}
 		if len(fields) > 0 {
-			huhGroups = append(huhGroups, huh.NewGroup(fields...).Title(g.Label).WithHeight(5))
+			huhGroups = append(huhGroups, huh.NewGroup(fields...))
 		}
 	}
 	if len(huhGroups) > 0 {
@@ -385,15 +398,13 @@ func buildField(m config.FieldMeta) huh.Field {
 			opts[i] = huh.NewOption(strings.ToUpper(o[:1])+o[1:], o)
 		}
 		return huh.NewSelect[string]().
-			Key(m.Key).Title(m.Label).
-			Inline(true).Height(3).
-			Options(opts...).
+			Key(m.Key).Title(m.Label).Description(m.Desc).
+			Options(opts...).Inline(true).
 			Accessor(&reflectAccessor[string]{v: m.Value})
 	case config.FieldConfirm:
 		return huh.NewConfirm().
-			Key(m.Key).Title(m.Label).
-			Affirmative("Yes").Negative("No").
-			Inline(true).
+			Key(m.Key).Title(m.Label).Description(m.Desc).
+			Affirmative("Yes").Negative("No").Inline(true).
 			Accessor(&reflectAccessor[bool]{v: m.Value})
 	case config.FieldReadOnly:
 		return huh.NewNote().
@@ -403,19 +414,16 @@ func buildField(m config.FieldMeta) huh.Field {
 		switch m.Value.Kind() {
 		case reflect.Int:
 			return huh.NewInput().
-				Key(m.Key).Title(m.Label).
-				Inline(true).
+				Key(m.Key).Title(m.Label).Description(m.Desc).Inline(true).
 				Accessor(&intAccessor{v: m.Value})
 		case reflect.Bool:
 			return huh.NewConfirm().
-				Key(m.Key).Title(m.Label).
+				Key(m.Key).Title(m.Label).Description(m.Desc).Inline(true).
 				Affirmative("Yes").Negative("No").
-				Inline(true).
 				Accessor(&reflectAccessor[bool]{v: m.Value})
 		default: // string and others
 			return huh.NewInput().
-				Key(m.Key).Title(m.Label).
-				Inline(true).
+				Key(m.Key).Title(m.Label).Description(m.Desc).Inline(true).
 				Accessor(&reflectAccessor[string]{v: m.Value})
 		}
 	}

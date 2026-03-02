@@ -5,7 +5,7 @@ Set Height 1080
 Set FontSize 32
 Set Framerate 30
 
-Type "scaffold/scfld"
+Type "scaffold/scfld --skip-welcome"
 Enter
 
 Sleep 5
@@ -26,8 +26,8 @@ Down
 Enter
 Sleep 2
 
-Type "l"
-Sleep 2
+Tab 10
+Sleep 1
 
 Escape
 Sleep 2
