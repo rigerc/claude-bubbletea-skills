@@ -18,7 +18,7 @@ func HuhTheme(name string, labelWidth, descWidth int) huh.Theme {
 		t := huh.ThemeCharm(isDark)
 
 		// Focused state - use Primary for interactive elements
-		t.Focused.Base = t.Focused.Base.BorderForeground(p.Border)
+		t.Focused.Base = t.Focused.Base.BorderForeground(p.Border).Background(p.Surface)
 		t.Focused.Card = t.Focused.Base
 		t.Focused.Title = t.Focused.Title.Foreground(p.Primary)
 		t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(p.Primary)

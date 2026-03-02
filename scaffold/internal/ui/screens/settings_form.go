@@ -73,10 +73,12 @@ func buildField(m config.FieldMeta) huh.Field {
 		for i, o := range options {
 			opts[i] = huh.NewOption(strings.ToUpper(o[:1])+o[1:], o)
 		}
-		return huh.NewSelect[string]().
-			Key(m.Key).Title(m.Label).Description(m.Desc).
+		// Use inlineSelect wrapper to render label/desc on same line as options
+		sel := huh.NewSelect[string]().
+			Key(m.Key).
 			Options(opts...).Inline(true).
 			Accessor(&reflectAccessor[string]{v: m.Value})
+		return newInlineSelect(m.Label, m.Desc, sel)
 	case config.FieldConfirm:
 		return huh.NewConfirm().
 			Key(m.Key).Title(m.Label).Description(m.Desc).

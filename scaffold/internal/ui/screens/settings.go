@@ -131,6 +131,13 @@ func (s *Settings) buildForm(themeName string) *huh.Form {
 	if s.width > 0 {
 		f = f.WithWidth(s.width)
 	}
+	if s.height > 0 {
+		formH := s.RequiredHeight()
+		if s.height < formH {
+			formH = s.height
+		}
+		f = f.WithHeight(formH)
+	}
 	return f
 }
 
