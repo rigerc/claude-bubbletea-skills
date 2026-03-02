@@ -224,7 +224,7 @@ func (s *Settings) buildForm(themeName string) *huh.Form {
 		WithTheme(theme.HuhTheme(themeName, s.maxLabelWidth(), s.maxDescWidth())).
 		WithKeyMap(s.huhKeys).
 		WithShowHelp(false).
-		WithHeight(s.RequiredHeight())
+		WithHeight(1)
 	if s.width > 0 {
 		f = f.WithWidth(s.width)
 	}

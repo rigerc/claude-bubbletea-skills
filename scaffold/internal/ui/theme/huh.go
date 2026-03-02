@@ -7,74 +7,66 @@ import (
 
 // HuhTheme returns a huh.Theme that matches the application palette for the given theme name.
 // Uses huh.ThemeFunc so huh drives isDark on every View() call.
+// Focused elements use Primary, unfocused use Secondary, descriptions use ForegroundMuted.
+// No background colors are applied.
 // labelWidth pins the title style to a fixed width when > 0, and descWidth pins
 // the description style, creating a multi-column layout where all field values
 // align to the same vertical column.
 func HuhTheme(name string, labelWidth, descWidth int) huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		p := NewPalette(name, isDark)
-		s := huh.ThemeCharm(isDark)
+		t := huh.ThemeCharm(isDark)
 
-		s.Focused.Base = s.Focused.Base.
-			Padding(0, 1, 0, 2).
-			BorderStyle(lipgloss.ThickBorder()).
-			BorderTop(false).BorderRight(false).BorderBottom(false).BorderLeft(true).
-			BorderForeground(p.Focus)
-		s.Focused.Card = s.Focused.Base
-		focusedTitle := s.Focused.Title.Foreground(p.Primary).Bold(true)
-		if labelWidth > 0 {
-			focusedTitle = focusedTitle.Width(labelWidth)
-		}
-		s.Focused.Title = focusedTitle.AlignHorizontal(lipgloss.Left)
-		s.Focused.NoteTitle = s.Focused.NoteTitle.Foreground(p.Primary).Bold(true)
-		s.Focused.Directory = s.Focused.Directory.Foreground(p.Primary)
-		focusedDesc := s.Focused.Description.Foreground(p.ForegroundMuted).AlignHorizontal(lipgloss.Left)
-		if descWidth > 0 {
-			focusedDesc = focusedDesc.Width(descWidth)
-		}
-		s.Focused.Description = focusedDesc
-		s.Focused.ErrorIndicator = s.Focused.ErrorIndicator.Foreground(p.Error)
-		s.Focused.ErrorMessage = s.Focused.ErrorMessage.Foreground(p.Error)
-		s.Focused.SelectSelector = s.Focused.SelectSelector.Foreground(p.Focus)
-		// PrevIndicator is used by Select inline carousel (← Option →).
-		// PaddingLeft pushes the carousel so the option value aligns with
-		// Input/Confirm values. Subtract the indicator's own width (← + margin)
-		// so the option text, not the arrow, hits the target column.
-		//prevWidth := lipgloss.Width(s.Focused.PrevIndicator.String())
-		selectIndent := max(labelWidth+descWidth, 0)
-		s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(p.Primary)
-		s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(p.Primary).PaddingLeft(selectIndent).AlignHorizontal(lipgloss.Left)
-		s.Focused.Option = s.Focused.Option.Foreground(p.ForegroundSubtle)
-		s.Focused.MultiSelectSelector = s.Focused.MultiSelectSelector.Foreground(p.Primary)
-		s.Focused.SelectedOption = s.Focused.SelectedOption.Foreground(p.OnPrimary).Background(p.Primary).Padding(0, 1)
-		s.Focused.SelectedPrefix = lipgloss.NewStyle().Foreground(p.SecondaryMuted).SetString("✓ ")
-		s.Focused.UnselectedPrefix = lipgloss.NewStyle().Foreground(p.SecondaryMuted).SetString("• ")
-		s.Focused.UnselectedOption = s.Focused.UnselectedOption.Foreground(p.ForegroundSubtle)
-		s.Focused.FocusedButton = s.Focused.FocusedButton.Foreground(p.OnPrimary).Background(p.Primary)
-		s.Focused.Next = s.Focused.FocusedButton
-		s.Focused.BlurredButton = s.Focused.BlurredButton.Foreground(p.ForegroundSubtle)
+		// Focused state - use Primary for interactive elements
+		t.Focused.Base = t.Focused.Base.BorderForeground(p.Border)
+		t.Focused.Card = t.Focused.Base
+		t.Focused.Title = t.Focused.Title.Foreground(p.Primary)
+		t.Focused.NoteTitle = t.Focused.NoteTitle.Foreground(p.Primary)
+		t.Focused.Directory = t.Focused.Directory.Foreground(p.Primary)
+		t.Focused.Description = t.Focused.Description.Foreground(p.ForegroundMuted)
+		t.Focused.ErrorIndicator = t.Focused.ErrorIndicator.Foreground(p.Error)
+		t.Focused.ErrorMessage = t.Focused.ErrorMessage.Foreground(p.Error)
+		t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(p.Primary)
+		t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(p.Primary)
+		t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(p.Primary)
+		t.Focused.Option = t.Focused.Option.Foreground(p.Foreground)
+		t.Focused.MultiSelectSelector = t.Focused.MultiSelectSelector.Foreground(p.Primary)
+		t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(p.Success)
+		t.Focused.SelectedPrefix = t.Focused.SelectedPrefix.Foreground(p.Success)
+		t.Focused.UnselectedPrefix = t.Focused.UnselectedPrefix.Foreground(p.ForegroundSubtle)
+		t.Focused.UnselectedOption = t.Focused.UnselectedOption.Foreground(p.Foreground)
+		t.Focused.FocusedButton = t.Focused.FocusedButton.Foreground(p.Primary)
+		t.Focused.BlurredButton = t.Focused.BlurredButton.Foreground(p.Secondary)
 
-		s.Focused.TextInput.Cursor = s.Focused.TextInput.Cursor.Foreground(p.Success)
-		s.Focused.TextInput.Placeholder = s.Focused.TextInput.Placeholder.Foreground(p.ForegroundSubtle)
-		s.Focused.TextInput.Prompt = s.Focused.TextInput.Prompt.Foreground(p.Focus)
+		// Text input styles
+		t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(p.Primary)
+		t.Focused.TextInput.Placeholder = t.Focused.TextInput.Placeholder.Foreground(p.ForegroundSubtle)
+		t.Focused.TextInput.Prompt = t.Focused.TextInput.Prompt.Foreground(p.Primary)
 
-		s.Blurred = s.Focused
-		s.Blurred.Base = s.Focused.Base.BorderStyle(lipgloss.HiddenBorder()).Padding(0, 1, 0, 2)
-		blurredTitle := s.Blurred.Title.Foreground(p.ForegroundSubtle)
-		if labelWidth > 0 {
-			blurredTitle = blurredTitle.Width(labelWidth)
-		}
-		s.Blurred.Title = blurredTitle.Foreground(p.Secondary)
-		s.Blurred.Card = s.Blurred.Base
-		s.Blurred.SelectedOption = s.Blurred.SelectedOption.Foreground(p.ForegroundMuted).Background(p.PrimaryMuted).Padding(0, 1)
-		s.Blurred.NextIndicator = lipgloss.NewStyle().Foreground(p.ForegroundSubtle)
-		//blurredPrevWidth := lipgloss.Width(s.Blurred.PrevIndicator.String())
-		blurredIndent := max(labelWidth+descWidth, 0)
-		s.Blurred.PrevIndicator = lipgloss.NewStyle().Foreground(p.ForegroundSubtle).PaddingLeft(blurredIndent)
+		// Blurred state - use Secondary for unfocused items
+		t.Blurred = t.Focused
+		t.Blurred.Base = t.Blurred.Base.BorderStyle(lipgloss.HiddenBorder())
+		t.Blurred.Card = t.Blurred.Base
+		t.Blurred.Title = t.Blurred.Title.Foreground(p.Secondary)
+		t.Blurred.NoteTitle = t.Blurred.NoteTitle.Foreground(p.Secondary)
+		t.Blurred.Directory = t.Blurred.Directory.Foreground(p.Secondary)
+		t.Blurred.SelectSelector = t.Blurred.SelectSelector.Foreground(p.Secondary)
+		t.Blurred.MultiSelectSelector = t.Blurred.MultiSelectSelector.Foreground(p.Secondary)
+		t.Blurred.TextInput.Prompt = t.Blurred.TextInput.Prompt.Foreground(p.Secondary)
 
-		s.Group.Title = s.Focused.Title.Margin(1).Underline(true)
-		s.Group.Description = s.Focused.Description
+		// Help styles - use muted colors
+		t.Help.Ellipsis = t.Help.Ellipsis.Foreground(p.ForegroundMuted)
+		t.Help.ShortKey = t.Help.ShortKey.Foreground(p.ForegroundMuted)
+		t.Help.ShortDesc = t.Help.ShortDesc.Foreground(p.ForegroundSubtle)
+		t.Help.ShortSeparator = t.Help.ShortSeparator.Foreground(p.ForegroundMuted)
+		t.Help.FullKey = t.Help.FullKey.Foreground(p.ForegroundMuted)
+		t.Help.FullDesc = t.Help.FullDesc.Foreground(p.ForegroundSubtle)
+		t.Help.FullSeparator = t.Help.FullSeparator.Foreground(p.ForegroundMuted)
 
-		return s
+		// Group styles
+		t.Group.Title = t.Focused.Title
+		t.Group.Description = t.Focused.Description
+
+		return t
 	})
 }
